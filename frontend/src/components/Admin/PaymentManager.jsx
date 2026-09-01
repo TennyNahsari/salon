@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   CreditCard, DollarSign, Calendar, Search, Printer, Trash2, 
-  CheckCircle2, Image as ImageIcon, Filter, RefreshCw, FileText, Download 
+  CheckCircle2, Image as ImageIcon, Filter, RefreshCw, FileText, Download, MessageCircle 
 } from 'lucide-react';
 import { deleteBooking } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
@@ -23,6 +23,15 @@ export default function PaymentManager({
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [selectedProofs, setSelectedProofs] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+
+  const getWhatsAppUrl = (phone) => {
+    if (!phone) return '#';
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '62' + cleaned.slice(1);
+    }
+    return `https://wa.me/${cleaned}`;
+  };
 
   // Filter only Completed transactions
   const completedBookings = bookings.filter(b => b.status === 'Completed');
@@ -272,9 +281,23 @@ export default function PaymentManager({
                     </td>
 
                     {/* Customer */}
-                    <td className="py-4 px-4 space-y-0.5">
+                    <td className="py-4 px-4 space-y-1">
                       <span className="font-bold text-slate-dark block">{b.customer_name}</span>
-                      <span className="text-xs text-grey-soft block font-mono">{b.customer_phone}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-grey-soft font-mono">{b.customer_phone}</span>
+                        {b.customer_phone && (
+                          <a
+                            href={getWhatsAppUrl(b.customer_phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors text-[11px] font-semibold shadow-xs"
+                            title="Chat via WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>WA</span>
+                          </a>
+                        )}
+                      </div>
                     </td>
 
                     {/* Services Breakdown */}

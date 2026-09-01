@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Filter, Plus, Calendar, Clock, CheckCircle2, Eye, XCircle, ChevronRight, FileText, Image as ImageIcon, Trash2, Users, Scissors, Download } from 'lucide-react';
+import { RefreshCw, Filter, Plus, Calendar, Clock, CheckCircle2, Eye, XCircle, ChevronRight, FileText, Image as ImageIcon, Trash2, Users, Scissors, Download, MessageCircle } from 'lucide-react';
 import { updateBookingStatus, deleteBooking } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
@@ -24,6 +24,15 @@ export default function BookingManager({
   const [staffFilter, setStaffFilter] = useState('All');
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
+
+  const getWhatsAppUrl = (phone) => {
+    if (!phone) return '#';
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '62' + cleaned.slice(1);
+    }
+    return `https://wa.me/${cleaned}`;
+  };
 
   const handleExportExcel = () => {
     const bookingsToExport = filteredBookings.filter(b => {
@@ -310,10 +319,26 @@ export default function BookingManager({
                     </td>
 
                     {/* Customer */}
-                    <td className="py-4 px-4 space-y-0.5">
+                    <td className="py-4 px-4 space-y-1">
                       <span className="font-bold text-slate-dark block">{b.customer_name}</span>
-                      <span className="text-xs text-grey-soft block">{b.customer_phone}</span>
-                      <span className="text-[11px] text-grey-soft block">{b.customer_email}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-grey-soft">{b.customer_phone}</span>
+                        {b.customer_phone && (
+                          <a
+                            href={getWhatsAppUrl(b.customer_phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 transition-colors text-[11px] font-semibold shadow-xs"
+                            title="Chat via WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>WA</span>
+                          </a>
+                        )}
+                      </div>
+                      {b.customer_email && (
+                        <span className="text-[11px] text-grey-soft block">{b.customer_email}</span>
+                      )}
                     </td>
 
                     {/* Service & Schedule Breakdown */}
