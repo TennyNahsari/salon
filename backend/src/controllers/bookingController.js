@@ -407,6 +407,11 @@ const uploadPaymentProof = async (req, res) => {
 const getAllBookings = async (req, res) => {
   try {
     const { status, date, outlet_id } = req.query;
+
+    const effectiveOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
+
     let query = `
       SELECT b.*, 
              s.name as service_name, s.price as service_price, s.duration_minutes as service_duration,
@@ -428,8 +433,8 @@ const getAllBookings = async (req, res) => {
       query += ` AND DATE(b.booking_datetime) = $${params.length}`;
     }
 
-    if (outlet_id) {
-      params.push(parseInt(outlet_id));
+    if (effectiveOutletId) {
+      params.push(parseInt(effectiveOutletId));
       query += ` AND b.outlet_id = $${params.length}`;
     }
 
@@ -450,9 +455,9 @@ const getAllBookings = async (req, res) => {
       FROM bookings
     `;
     let statsParams = [];
-    if (outlet_id) {
+    if (effectiveOutletId) {
       statsQuery += ` WHERE outlet_id = $1`;
-      statsParams.push(parseInt(outlet_id));
+      statsParams.push(parseInt(effectiveOutletId));
     }
 
     const statsRes = await db.query(statsQuery, statsParams);
@@ -476,6 +481,11 @@ const refreshBookings = async (req, res) => {
 
     // 2. Fetch updated bookings
     const { status, date, outlet_id } = req.query;
+
+    const effectiveOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
+
     let query = `
       SELECT b.*, 
              s.name as service_name, s.price as service_price, s.duration_minutes as service_duration,
@@ -497,8 +507,8 @@ const refreshBookings = async (req, res) => {
       query += ` AND DATE(b.booking_datetime) = $${params.length}`;
     }
 
-    if (outlet_id) {
-      params.push(parseInt(outlet_id));
+    if (effectiveOutletId) {
+      params.push(parseInt(effectiveOutletId));
       query += ` AND b.outlet_id = $${params.length}`;
     }
 
@@ -518,9 +528,9 @@ const refreshBookings = async (req, res) => {
       FROM bookings
     `;
     let statsParams = [];
-    if (outlet_id) {
+    if (effectiveOutletId) {
       statsQuery += ` WHERE outlet_id = $1`;
-      statsParams.push(parseInt(outlet_id));
+      statsParams.push(parseInt(effectiveOutletId));
     }
 
     const statsRes = await db.query(statsQuery, statsParams);
@@ -547,6 +557,17 @@ const updateStatus = async (req, res) => {
     const validStatuses = ['Pending', 'Confirmed', 'Processed', 'Completed', 'Cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Status booking tidak valid.' });
+    }
+
+    // Check outlet authorization if not super admin
+    if (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id) {
+      const checkOutlet = await db.query('SELECT outlet_id FROM bookings WHERE id = $1', [id]);
+      if (checkOutlet.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Booking tidak ditemukan.' });
+      }
+      if (checkOutlet.rows[0].outlet_id !== req.admin.outlet_id) {
+        return res.status(403).json({ success: false, message: 'Akses ditolak. Anda tidak berwenang mengelola booking di cabang lain.' });
+      }
     }
 
     let query = 'UPDATE bookings SET status = $1';
@@ -595,7 +616,11 @@ const createManualBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Nama, No. HP, Layanan, dan Waktu Booking wajib diisi.' });
     }
 
-    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
+    // Enforce outlet_id for branch admin
+    const finalOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
+
     const bookingCode = generateBookingCode();
     const bookingDateObj = new Date(booking_datetime);
     // 24 hour default deadline for manual booking
@@ -618,7 +643,7 @@ const createManualBooking = async (req, res) => {
       customer_name,
       customer_phone,
       customer_email || 'manual@salon.local',
-      parsedOutletId,
+      finalOutletId,
       service_id,
       staff_name || 'Admin / Resepsionis',
       bookingDateObj,
@@ -644,6 +669,18 @@ const createManualBooking = async (req, res) => {
 const deleteBooking = async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Check outlet authorization if not super admin
+    if (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id) {
+      const checkOutlet = await db.query('SELECT outlet_id FROM bookings WHERE id = $1', [id]);
+      if (checkOutlet.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Booking tidak ditemukan.' });
+      }
+      if (checkOutlet.rows[0].outlet_id !== req.admin.outlet_id) {
+        return res.status(403).json({ success: false, message: 'Akses ditolak. Anda tidak berwenang menghapus booking di cabang lain.' });
+      }
+    }
+
     const result = await db.query('DELETE FROM bookings WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Booking tidak ditemukan.' });

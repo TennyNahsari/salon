@@ -66,18 +66,34 @@ const createService = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Nama, durasi, dan harga wajib diisi.' });
     }
 
+    const isSuperAdmin = req.admin?.role === 'admin';
+    const userOutletId = req.admin?.outlet_id;
+
+    let finalOutletIds = [];
+    let createdByOutletId = null;
+
+    if (!isSuperAdmin) {
+      if (!userOutletId) {
+        return res.status(403).json({ success: false, message: 'Akses ditolak. User cabang tidak memiliki outlet_id.' });
+      }
+      createdByOutletId = userOutletId;
+      finalOutletIds = [userOutletId];
+    } else {
+      finalOutletIds = Array.isArray(outlet_ids) ? outlet_ids : [];
+    }
+
     const defaultImg = image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
     const result = await db.query(
-      `INSERT INTO services (name, duration_minutes, price, description, image_url)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [name, parseInt(duration_minutes), parseFloat(price), description || '', defaultImg]
+      `INSERT INTO services (name, duration_minutes, price, description, image_url, created_by_outlet_id)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [name, parseInt(duration_minutes), parseFloat(price), description || '', defaultImg, createdByOutletId]
     );
 
     const service = result.rows[0];
 
     // Insert outlet mappings
-    if (Array.isArray(outlet_ids) && outlet_ids.length > 0) {
-      for (const outletId of outlet_ids) {
+    if (finalOutletIds.length > 0) {
+      for (const outletId of finalOutletIds) {
         await db.query(
           'INSERT INTO outlet_services (outlet_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [parseInt(outletId), service.id]
@@ -90,7 +106,7 @@ const createService = async (req, res) => {
       message: 'Layanan baru berhasil ditambahkan.',
       service: {
         ...service,
-        outlet_ids: outlet_ids || []
+        outlet_ids: finalOutletIds
       }
     });
   } catch (err) {
@@ -104,6 +120,35 @@ const updateService = async (req, res) => {
     const { id } = req.params;
     const { name, duration_minutes, price, description, image_url, outlet_ids } = req.body;
 
+    const isSuperAdmin = req.admin?.role === 'admin';
+    const userOutletId = req.admin?.outlet_id;
+
+    // Check existing service
+    const checkRes = await db.query(
+      `SELECT s.*, COALESCE(json_agg(os.outlet_id) FILTER (WHERE os.outlet_id IS NOT NULL), '[]') as outlet_ids 
+       FROM services s 
+       LEFT JOIN outlet_services os ON s.id = os.service_id 
+       WHERE s.id = $1 
+       GROUP BY s.id`,
+      [id]
+    );
+
+    if (checkRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan.' });
+    }
+
+    const currentService = checkRes.rows[0];
+
+    if (!isSuperAdmin) {
+      // Branch operators can ONLY edit services created by their own branch
+      if (!currentService.created_by_outlet_id || currentService.created_by_outlet_id !== userOutletId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Akses ditolak. Layanan master atau layanan cabang lain tidak dapat diubah oleh operator cabang.'
+        });
+      }
+    }
+
     const result = await db.query(
       `UPDATE services 
        SET name = $1, duration_minutes = $2, price = $3, description = $4, image_url = $5
@@ -111,19 +156,24 @@ const updateService = async (req, res) => {
       [name, parseInt(duration_minutes), parseFloat(price), description, image_url, id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan.' });
-    }
-
     // Update outlet mappings
-    if (Array.isArray(outlet_ids)) {
+    let finalOutletIds = [];
+    if (isSuperAdmin) {
+      finalOutletIds = Array.isArray(outlet_ids) ? outlet_ids : [];
       await db.query('DELETE FROM outlet_services WHERE service_id = $1', [id]);
-      for (const outletId of outlet_ids) {
+      for (const outletId of finalOutletIds) {
         await db.query(
           'INSERT INTO outlet_services (outlet_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [parseInt(outletId), id]
         );
       }
+    } else {
+      finalOutletIds = [userOutletId];
+      // ensure it remains assigned to user's outlet
+      await db.query(
+        'INSERT INTO outlet_services (outlet_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [userOutletId, id]
+      );
     }
 
     res.json({
@@ -131,7 +181,7 @@ const updateService = async (req, res) => {
       message: 'Layanan berhasil diperbarui.',
       service: {
         ...result.rows[0],
-        outlet_ids: outlet_ids || []
+        outlet_ids: finalOutletIds
       }
     });
   } catch (err) {
@@ -143,10 +193,26 @@ const updateService = async (req, res) => {
 const deleteService = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await db.query('DELETE FROM services WHERE id = $1 RETURNING *', [id]);
-    if (result.rows.length === 0) {
+    const isSuperAdmin = req.admin?.role === 'admin';
+    const userOutletId = req.admin?.outlet_id;
+
+    const checkRes = await db.query('SELECT * FROM services WHERE id = $1', [id]);
+    if (checkRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Layanan tidak ditemukan.' });
     }
+
+    const currentService = checkRes.rows[0];
+
+    if (!isSuperAdmin) {
+      if (!currentService.created_by_outlet_id || currentService.created_by_outlet_id !== userOutletId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Akses ditolak. Layanan master atau layanan cabang lain tidak dapat dihapus oleh operator cabang.'
+        });
+      }
+    }
+
+    const result = await db.query('DELETE FROM services WHERE id = $1 RETURNING *', [id]);
     res.json({ success: true, message: 'Layanan berhasil dihapus.' });
   } catch (err) {
     console.error('Error deleting service:', err);

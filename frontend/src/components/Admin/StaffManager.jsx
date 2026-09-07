@@ -4,9 +4,11 @@ import { getAllStaff, createStaff, updateStaff, deleteStaff } from '../../servic
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
 
-export default function StaffManager({ services, outlets }) {
+export default function StaffManager({ services, outlets, userRole, userOutletId }) {
   const { t } = useLanguage();
   const [staffList, setStaffList] = useState([]);
+
+  const isBranchAdmin = userRole !== 'admin' && userOutletId;
 
   const handleExportExcel = () => {
     const headers = ['ID Staff', 'Nama Staff', 'Cabang Outlet', 'Peran / Role', 'Status Cuti / Aktif', 'Keahlian Layanan'];
@@ -27,7 +29,7 @@ export default function StaffManager({ services, outlets }) {
   const [formData, setFormData] = useState({
     name: '',
     role: 'Stylist / Therapist',
-    outlet_id: outlets && outlets.length > 0 ? outlets[0].id : '',
+    outlet_id: userOutletId ? String(userOutletId) : (outlets && outlets.length > 0 ? String(outlets[0].id) : ''),
     is_active: true,
     service_ids: []
   });
@@ -58,7 +60,7 @@ export default function StaffManager({ services, outlets }) {
     setFormData({
       name: '',
       role: 'Stylist / Therapist',
-      outlet_id: outlets && outlets.length > 0 ? outlets[0].id : '',
+      outlet_id: userOutletId ? String(userOutletId) : (outlets && outlets.length > 0 ? String(outlets[0].id) : ''),
       is_active: true,
       service_ids: services ? services.map(s => s.id) : []
     });
@@ -94,7 +96,7 @@ export default function StaffManager({ services, outlets }) {
     e.preventDefault();
     setError('');
     if (!formData.name) {
-      setError('Nama staff wajib diisi.');
+      setError(t('err_staff_name_required'));
       return;
     }
 
@@ -108,19 +110,19 @@ export default function StaffManager({ services, outlets }) {
       setModalOpen(false);
       fetchStaff();
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal menyimpan data staff.');
+      setError(err.response?.data?.message || t('err_save_staff'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus staff ${name}?`)) return;
+    if (!window.confirm(`${t('confirm_delete_staff')} ${name}?`)) return;
     try {
       await deleteStaff(id);
       fetchStaff();
     } catch (err) {
-      alert('Gagal menghapus staff.');
+      alert(t('err_delete_staff'));
     }
   };
 
@@ -134,7 +136,7 @@ export default function StaffManager({ services, outlets }) {
       });
       fetchStaff();
     } catch (err) {
-      alert('Gagal mengubah status staff.');
+      alert(t('err_save_staff'));
     }
   };
 
@@ -172,10 +174,10 @@ export default function StaffManager({ services, outlets }) {
 
       {/* Staff Grid */}
       {loading ? (
-        <div className="text-center py-12 text-grey-soft font-medium">Memuat data staff...</div>
+        <div className="text-center py-12 text-grey-soft font-medium">{t('loading_staff')}</div>
       ) : staffList.length === 0 ? (
         <div className="text-center py-12 text-grey-soft font-medium bg-white rounded-2xl border border-grey-border">
-          Belum ada staff terdaftar. Silakan tambahkan staff baru.
+          {t('empty_staff')}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -199,7 +201,7 @@ export default function StaffManager({ services, outlets }) {
                         <h3 className="font-serif font-bold text-slate-dark text-lg leading-snug">{st.name}</h3>
                         <span className="text-xs text-rosegold font-medium block">{st.role || 'Stylist / Therapist'}</span>
                         <span className="text-[11px] text-emeraldsoft font-bold block mt-0.5">
-                          📍 {st.outlet_name || 'Semua Cabang'}
+                          📍 {st.outlet_name || t('all_outlets')}
                         </span>
                       </div>
                     </div>
@@ -212,9 +214,9 @@ export default function StaffManager({ services, outlets }) {
                           ? 'bg-status-green/10 text-status-green border-status-green/30 hover:bg-status-green/20'
                           : 'bg-status-coral/10 text-status-coral border-status-coral/30 hover:bg-status-coral/20'
                       }`}
-                      title="Klik untuk mengubah status (Aktif Bertugas / Sedang Cuti)"
+                      title="Klik untuk mengubah status"
                     >
-                      {st.is_active ? '🟢 Aktif (Bertugas)' : '🏖️ Cuti / Off'}
+                      {st.is_active ? `🟢 ${t('status_staff_active')}` : `🏖️ ${t('status_staff_off')}`}
                     </button>
                   </div>
 
@@ -222,7 +224,7 @@ export default function StaffManager({ services, outlets }) {
                   <div className="pt-2 border-t border-cream-200 space-y-1.5">
                     <span className="text-[11px] uppercase font-bold text-grey-soft tracking-wider block flex items-center gap-1">
                       <Scissors className="w-3.5 h-3.5 text-emeraldsoft" />
-                      Keahlian Layanan ({mappedServiceNames.length}):
+                      {t('th_skills')} ({mappedServiceNames.length}):
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {mappedServiceNames.length > 0 ? (
@@ -235,7 +237,7 @@ export default function StaffManager({ services, outlets }) {
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-status-coral italic">Belum ada keahlian dipilih</span>
+                        <span className="text-xs text-status-coral italic">{t('no_skills_selected')}</span>
                       )}
                     </div>
                   </div>
@@ -248,7 +250,7 @@ export default function StaffManager({ services, outlets }) {
                     className="p-2 rounded-xl bg-cream-100 text-slate-dark hover:bg-emeraldsoft hover:text-white transition-colors text-xs font-semibold flex items-center gap-1"
                   >
                     <Edit className="w-3.5 h-3.5" />
-                    <span>Edit</span>
+                    <span>{t('btn_edit')}</span>
                   </button>
 
                   <button
@@ -256,7 +258,7 @@ export default function StaffManager({ services, outlets }) {
                     className="p-2 rounded-xl bg-status-coral/10 text-status-coral hover:bg-status-coral hover:text-white transition-colors text-xs font-semibold flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Hapus</span>
+                    <span>{t('btn_delete')}</span>
                   </button>
                 </div>
 
@@ -274,7 +276,7 @@ export default function StaffManager({ services, outlets }) {
             
             <div className="p-6 pb-4 border-b border-cream-200 flex items-center justify-between">
               <h3 className="font-serif text-2xl font-bold text-slate-dark">
-                {editingStaff ? 'Edit Data Staff' : '+ Tambah Staff Baru'}
+                {editingStaff ? t('modal_edit_staff_title') : t('modal_add_staff_title')}
               </h3>
               <button onClick={() => setModalOpen(false)} className="text-grey-soft hover:text-slate-dark text-xl font-bold">
                 ✕
@@ -286,11 +288,11 @@ export default function StaffManager({ services, outlets }) {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                  Nama Staff *
+                  {t('field_staff_name')}
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Stylist Anita"
+                  placeholder={t('placeholder_staff_name')}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm text-slate-dark"
@@ -305,10 +307,11 @@ export default function StaffManager({ services, outlets }) {
                   </label>
                   <select
                     value={formData.outlet_id}
+                    disabled={isBranchAdmin}
                     onChange={(e) => setFormData({ ...formData, outlet_id: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm text-slate-dark bg-cream-50 font-medium"
+                    className={`w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm text-slate-dark bg-cream-50 font-medium ${isBranchAdmin ? 'opacity-80 cursor-not-allowed bg-cream-100' : ''}`}
                   >
-                    <option value="">-- {t('all_outlets')} --</option>
+                    {!isBranchAdmin && <option value="">-- {t('all_outlets')} --</option>}
                     {outlets.map(o => (
                       <option key={o.id} value={o.id}>
                         📍 {o.name}
@@ -320,11 +323,11 @@ export default function StaffManager({ services, outlets }) {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                  Spesialisasi / Jabatan
+                  {t('field_staff_role')}
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Senior Hair Stylist"
+                  placeholder={t('placeholder_staff_role')}
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm text-slate-dark"
@@ -333,7 +336,7 @@ export default function StaffManager({ services, outlets }) {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-2">
-                  Pilih Layanan yang Bisa Dikerjakan (Skill Match) *
+                  {t('field_staff_skills')}
                 </label>
                 <div className="space-y-2 max-h-48 overflow-y-auto p-3 rounded-xl border border-grey-border bg-cream-50">
                   {(services || []).map((s) => {
@@ -370,7 +373,7 @@ export default function StaffManager({ services, outlets }) {
                   className="w-4 h-4 text-emeraldsoft rounded focus:ring-emeraldsoft accent-emeraldsoft"
                 />
                 <label htmlFor="is_active" className="text-xs font-semibold text-slate-dark cursor-pointer">
-                  Status Staff Aktif / Siap Bertugas (Uncheck jika Sedang Cuti / Off)
+                  {t('staff_active_status_label')}
                 </label>
               </div>
 
@@ -380,14 +383,14 @@ export default function StaffManager({ services, outlets }) {
                   onClick={() => setModalOpen(false)}
                   className="px-4 py-2.5 rounded-xl border border-grey-border text-xs font-semibold text-grey-soft hover:bg-cream-200"
                 >
-                  Batal
+                  {t('btn_cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
                   className="px-6 py-2.5 rounded-xl bg-emeraldsoft text-white font-bold text-xs hover:bg-emeraldsoft-dark transition-all disabled:opacity-50"
                 >
-                  {saving ? 'Menyimpan...' : editingStaff ? 'Simpan Perubahan' : 'Tambah Staff'}
+                  {saving ? t('btn_saving') : editingStaff ? t('btn_save_changes') : t('btn_add_staff_submit')}
                 </button>
               </div>
             </form>

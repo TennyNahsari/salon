@@ -8,9 +8,15 @@ import ServiceManager from '../components/Admin/ServiceManager';
 import StaffManager from '../components/Admin/StaffManager';
 import PaymentManager from '../components/Admin/PaymentManager';
 import PaymentConfig from '../components/Admin/PaymentConfig';
+import UserManager from '../components/Admin/UserManager';
+import { useAuth } from '../context/AuthContext';
 import { getAllBookings, refreshBookings, getServices, getOutlets } from '../services/api';
 
 export default function AdminDashboardPage({ onGoHome }) {
+  const { admin } = useAuth();
+  const isSuperAdmin = admin?.role === 'admin';
+  const branchOutletId = admin?.role !== 'admin' && admin?.outlet_id ? String(admin.outlet_id) : '';
+
   const [activeTab, setActiveTab] = useState('overview');
   
   // Data states
@@ -22,7 +28,7 @@ export default function AdminDashboardPage({ onGoHome }) {
   const [loadingServices, setLoadingServices] = useState(true);
 
   const [outlets, setOutlets] = useState([]);
-  const [outletFilter, setOutletFilter] = useState('');
+  const [outletFilter, setOutletFilter] = useState(branchOutletId);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState('All');
@@ -31,16 +37,31 @@ export default function AdminDashboardPage({ onGoHome }) {
   // Manual booking modal
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
+  // Sync outlet filter if logged in as branch admin
   useEffect(() => {
-    fetchBookingsData();
-    fetchServicesData();
-    fetchOutletsData();
-  }, [statusFilter, dateFilter, outletFilter]);
+    if (!isSuperAdmin && branchOutletId) {
+      setOutletFilter(branchOutletId);
+    }
+  }, [isSuperAdmin, branchOutletId]);
 
-  const fetchBookingsData = async () => {
+  // Protect tabs if not super admin
+  useEffect(() => {
+    if (!isSuperAdmin && (activeTab === 'outlets' || activeTab === 'users' || activeTab === 'payment')) {
+      setActiveTab('overview');
+    }
+  }, [activeTab, isSuperAdmin]);
+
+  useEffect(() => {
+    const effectiveOutlet = (!isSuperAdmin && branchOutletId) ? branchOutletId : outletFilter;
+    fetchBookingsData(effectiveOutlet);
+    fetchServicesData(effectiveOutlet);
+    fetchOutletsData();
+  }, [statusFilter, dateFilter, outletFilter, isSuperAdmin, branchOutletId]);
+
+  const fetchBookingsData = async (effectiveOutlet = outletFilter) => {
     try {
       setLoadingBookings(true);
-      const res = await getAllBookings(statusFilter, dateFilter, outletFilter);
+      const res = await getAllBookings(statusFilter, dateFilter, effectiveOutlet);
       if (res.success) {
         setBookings(res.bookings);
         setStats(res.stats);
@@ -52,10 +73,10 @@ export default function AdminDashboardPage({ onGoHome }) {
     }
   };
 
-  const fetchServicesData = async () => {
+  const fetchServicesData = async (effectiveOutlet = outletFilter) => {
     try {
       setLoadingServices(true);
-      const res = await getServices();
+      const res = await getServices(effectiveOutlet);
       if (res.success) {
         setServices(res.services);
       }
@@ -80,7 +101,8 @@ export default function AdminDashboardPage({ onGoHome }) {
   const handleRefresh = async () => {
     try {
       setLoadingBookings(true);
-      const res = await refreshBookings(statusFilter, dateFilter, outletFilter);
+      const effectiveOutlet = (!isSuperAdmin && branchOutletId) ? branchOutletId : outletFilter;
+      const res = await refreshBookings(statusFilter, dateFilter, effectiveOutlet);
       if (res.success) {
         setBookings(res.bookings);
         setStats(res.stats);
@@ -93,7 +115,7 @@ export default function AdminDashboardPage({ onGoHome }) {
   };
 
   return (
-    <div className="min-h-screen bg-cream flex flex-col md:flex-row">
+    <div className="flex flex-col md:flex-row min-h-screen bg-sand/30 font-sans">
       
       {/* Sidebar Navigation */}
       <AdminSidebar
@@ -103,16 +125,22 @@ export default function AdminDashboardPage({ onGoHome }) {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-10 max-w-7xl overflow-x-hidden">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
         {activeTab === 'overview' && (
           <DashboardOverview
             stats={stats}
-            onNavigateBookings={() => setActiveTab('bookings')}
+            bookings={bookings}
+            onOpenManualModal={() => setIsManualModalOpen(true)}
+            onNavigate={(tab) => setActiveTab(tab)}
           />
         )}
 
-        {activeTab === 'outlets' && (
+        {activeTab === 'outlets' && isSuperAdmin && (
           <OutletManager />
+        )}
+
+        {activeTab === 'users' && isSuperAdmin && (
+          <UserManager outlets={outlets} />
         )}
 
         {activeTab === 'bookings' && (
@@ -129,6 +157,9 @@ export default function AdminDashboardPage({ onGoHome }) {
             onRefresh={handleRefresh}
             onOpenManualModal={() => setIsManualModalOpen(true)}
             services={services}
+            userRole={admin?.role}
+            userOutletId={admin?.outlet_id}
+            userOutletName={admin?.outlet_name}
           />
         )}
 
@@ -136,13 +167,21 @@ export default function AdminDashboardPage({ onGoHome }) {
           <ServiceManager
             services={services}
             loading={loadingServices}
-            onRefresh={fetchServicesData}
+            onRefresh={() => fetchServicesData((!isSuperAdmin && branchOutletId) ? branchOutletId : outletFilter)}
             outlets={outlets}
+            userRole={admin?.role}
+            userOutletId={admin?.outlet_id}
+            userOutletName={admin?.outlet_name}
           />
         )}
 
         {activeTab === 'staff' && (
-          <StaffManager services={services} outlets={outlets} />
+          <StaffManager 
+            services={services} 
+            outlets={outlets} 
+            userRole={admin?.role}
+            userOutletId={admin?.outlet_id}
+          />
         )}
 
         {activeTab === 'payments_module' && (
@@ -150,10 +189,16 @@ export default function AdminDashboardPage({ onGoHome }) {
             bookings={bookings}
             loading={loadingBookings}
             onRefresh={handleRefresh}
+            outlets={outlets}
+            outletFilter={outletFilter}
+            setOutletFilter={setOutletFilter}
+            userRole={admin?.role}
+            userOutletId={admin?.outlet_id}
+            userOutletName={admin?.outlet_name}
           />
         )}
 
-        {activeTab === 'payment' && (
+        {activeTab === 'payment' && isSuperAdmin && (
           <PaymentConfig />
         )}
       </main>
@@ -164,7 +209,8 @@ export default function AdminDashboardPage({ onGoHome }) {
         onClose={() => setIsManualModalOpen(false)}
         services={services}
         outlets={outlets}
-        onSaved={fetchBookingsData}
+        userOutletId={admin?.outlet_id}
+        onSaved={() => fetchBookingsData((!isSuperAdmin && branchOutletId) ? branchOutletId : outletFilter)}
       />
 
     </div>

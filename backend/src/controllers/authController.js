@@ -13,7 +13,13 @@ const login = async (req, res) => {
     // Cek ke tabel users di PostgreSQL
     let user = null;
     try {
-      const userRes = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+      const userRes = await db.query(
+        `SELECT u.*, o.name as outlet_name
+         FROM users u
+         LEFT JOIN outlets o ON u.outlet_id = o.id
+         WHERE u.username = $1`,
+        [username]
+      );
       if (userRes.rows.length > 0) {
         user = userRes.rows[0];
       }
@@ -31,7 +37,12 @@ const login = async (req, res) => {
       }
 
       const token = jwt.sign(
-        { username: user.username, role: user.role || 'admin' },
+        { 
+          id: user.id, 
+          username: user.username, 
+          role: user.role || 'admin', 
+          outlet_id: user.outlet_id || null 
+        },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
@@ -39,14 +50,21 @@ const login = async (req, res) => {
         success: true,
         message: 'Login berhasil!',
         token,
-        admin: { username: user.username, role: user.role || 'admin', name: user.name }
+        admin: { 
+          id: user.id,
+          username: user.username, 
+          role: user.role || 'admin', 
+          name: user.name,
+          outlet_id: user.outlet_id || null,
+          outlet_name: user.outlet_name || null
+        }
       });
     }
 
     // Fallback env / hardcoded admin credentials check
     if (username === ADMIN_USER && password === ADMIN_PASS) {
       const token = jwt.sign(
-        { username: ADMIN_USER, role: 'admin' },
+        { username: ADMIN_USER, role: 'admin', outlet_id: null },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
@@ -54,7 +72,7 @@ const login = async (req, res) => {
         success: true,
         message: 'Login berhasil!',
         token,
-        admin: { username: ADMIN_USER, role: 'admin' }
+        admin: { username: ADMIN_USER, role: 'admin', name: 'Super Admin', outlet_id: null, outlet_name: null }
       });
     } else {
       return res.status(401).json({
@@ -70,11 +88,34 @@ const login = async (req, res) => {
   }
 };
 
-const getMe = (req, res) => {
-  res.json({
-    success: true,
-    admin: req.admin
-  });
+const getMe = async (req, res) => {
+  try {
+    if (!req.admin) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    const userRes = await db.query(
+      `SELECT u.id, u.username, u.name, u.role, u.outlet_id, o.name as outlet_name
+       FROM users u
+       LEFT JOIN outlets o ON u.outlet_id = o.id
+       WHERE u.username = $1`,
+      [req.admin.username]
+    );
+    if (userRes.rows.length > 0) {
+      return res.json({
+        success: true,
+        admin: userRes.rows[0]
+      });
+    }
+    res.json({
+      success: true,
+      admin: req.admin
+    });
+  } catch (err) {
+    res.json({
+      success: true,
+      admin: req.admin
+    });
+  }
 };
 
 module.exports = {

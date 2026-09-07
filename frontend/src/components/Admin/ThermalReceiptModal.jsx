@@ -91,9 +91,18 @@ export default function ThermalReceiptModal({ isOpen, onClose, transaction, conf
                 <Scissors className="w-4 h-4 text-emeraldsoft" />
                 <span>LUXE SALON &amp; SPA</span>
               </div>
+              {transaction.outlet_name && (
+                <p className="text-[11px] font-bold text-emeraldsoft">
+                  📍 {transaction.outlet_name}
+                </p>
+              )}
               <p className="text-[10px] text-grey-soft">Beauty, Care &amp; Harmony</p>
-              <p className="text-[10px] text-grey-soft">Jl. Premium Beauty No. 88, Jakarta</p>
-              <p className="text-[10px] text-grey-soft">WA: {configs?.whatsapp_number || '0812-3456-7890'}</p>
+              <p className="text-[10px] text-grey-soft">
+                {transaction.outlet_address || 'Jl. Premium Beauty No. 88, Jakarta'}
+              </p>
+              <p className="text-[10px] text-grey-soft">
+                WA: {transaction.outlet_phone || configs?.whatsapp_number || '0812-3456-7890'}
+              </p>
             </div>
 
             {/* Invoice Info */}
@@ -102,6 +111,12 @@ export default function ThermalReceiptModal({ isOpen, onClose, transaction, conf
                 <span>{t('receipt_invoice_no')}</span>
                 <span className="font-bold">{transaction.booking_code}</span>
               </div>
+              {transaction.outlet_name && (
+                <div className="flex justify-between">
+                  <span>{t('th_outlet')}:</span>
+                  <span className="font-semibold">{transaction.outlet_name}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span>{t('receipt_trans_date')}</span>
                 <span>{formatDateTime(transaction.created_at || new Date())}</span>

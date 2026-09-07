@@ -4,12 +4,17 @@ const db = require('../config/db');
 const getAllStaff = async (req, res) => {
   try {
     const { outlet_id } = req.query;
+
+    const effectiveOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
+
     let whereClause = '';
     let params = [];
 
-    if (outlet_id) {
+    if (effectiveOutletId) {
       whereClause = 'WHERE s.outlet_id = $1';
-      params = [outlet_id];
+      params = [parseInt(effectiveOutletId)];
     }
 
     const query = `
@@ -47,11 +52,13 @@ const createStaff = async (req, res) => {
     }
 
     const activeState = is_active !== undefined ? is_active : true;
-    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
+    const finalOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
 
     const staffRes = await db.query(
       'INSERT INTO staff (name, role, outlet_id, is_active) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, role || 'Stylist / Therapist', parsedOutletId, activeState]
+      [name, role || 'Stylist / Therapist', finalOutletId, activeState]
     );
     const staff = staffRes.rows[0];
 
@@ -85,11 +92,23 @@ const updateStaff = async (req, res) => {
     const { id } = req.params;
     const { name, role, outlet_id, is_active, service_ids } = req.body;
 
-    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
+    if (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id) {
+      const checkOutlet = await db.query('SELECT outlet_id FROM staff WHERE id = $1', [id]);
+      if (checkOutlet.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Staff tidak ditemukan.' });
+      }
+      if (checkOutlet.rows[0].outlet_id !== req.admin.outlet_id) {
+        return res.status(403).json({ success: false, message: 'Akses ditolak. Anda tidak berwenang mengelola staff di cabang lain.' });
+      }
+    }
+
+    const finalOutletId = (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id)
+      ? req.admin.outlet_id
+      : (outlet_id ? parseInt(outlet_id) : null);
 
     const staffRes = await db.query(
       'UPDATE staff SET name = $1, role = $2, outlet_id = $3, is_active = $4 WHERE id = $5 RETURNING *',
-      [name, role || 'Stylist / Therapist', parsedOutletId, is_active, id]
+      [name, role || 'Stylist / Therapist', finalOutletId, is_active, id]
     );
 
     if (staffRes.rows.length === 0) {
@@ -125,6 +144,17 @@ const updateStaff = async (req, res) => {
 const deleteStaff = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (req.admin && req.admin.role !== 'admin' && req.admin.outlet_id) {
+      const checkOutlet = await db.query('SELECT outlet_id FROM staff WHERE id = $1', [id]);
+      if (checkOutlet.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Staff tidak ditemukan.' });
+      }
+      if (checkOutlet.rows[0].outlet_id !== req.admin.outlet_id) {
+        return res.status(403).json({ success: false, message: 'Akses ditolak. Anda tidak berwenang menghapus staff di cabang lain.' });
+      }
+    }
+
     const result = await db.query('DELETE FROM staff WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Staff tidak ditemukan.' });

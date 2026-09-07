@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   CreditCard, DollarSign, Calendar, Search, Printer, Trash2, 
-  CheckCircle2, Image as ImageIcon, Filter, RefreshCw, FileText, Download, MessageCircle 
+  CheckCircle2, Image as ImageIcon, Filter, RefreshCw, FileText, Download, MessageCircle,
+  Building2, MapPin
 } from 'lucide-react';
 import { deleteBooking } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
@@ -14,7 +15,13 @@ export default function PaymentManager({
   bookings,
   loading,
   onRefresh,
-  configs
+  configs,
+  outlets,
+  outletFilter,
+  setOutletFilter,
+  userRole,
+  userOutletId,
+  userOutletName
 }) {
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,6 +30,8 @@ export default function PaymentManager({
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [selectedProofs, setSelectedProofs] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+
+  const isBranchAdmin = userRole !== 'admin' && userOutletId;
 
   const getWhatsAppUrl = (phone) => {
     if (!phone) return '#';
@@ -41,6 +50,7 @@ export default function PaymentManager({
     const matchesSearch = 
       b.booking_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (b.outlet_name && b.outlet_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       b.customer_phone.includes(searchTerm);
 
     let matchesDate = true;
@@ -56,6 +66,7 @@ export default function PaymentManager({
   const handleExportExcel = () => {
     const headers = [
       'No. Nota / Kode',
+      'Cabang Outlet',
       'Tanggal Transaksi',
       'Nama Customer',
       'No. WhatsApp',
@@ -67,6 +78,7 @@ export default function PaymentManager({
 
     const rows = filteredPayments.map(b => [
       b.booking_code,
+      b.outlet_name || 'Semua Outlet',
       formatDateTime(b.booking_datetime),
       b.customer_name,
       b.customer_phone,
@@ -200,8 +212,33 @@ export default function PaymentManager({
           />
         </div>
 
-        {/* Date Filter Range & Export Excel */}
+        {/* Date Filter Range, Outlet Filter & Export Excel */}
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+          
+          {/* Outlet Filter (Super Admin sees dropdown, Outlet Admin sees fixed badge) */}
+          {isBranchAdmin ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emeraldsoft/10 text-emeraldsoft border border-emeraldsoft/30 text-xs font-bold shadow-2xs">
+              <Building2 className="w-4 h-4 text-rosegold" />
+              <span>📍 {userOutletName || outlets?.find(o => String(o.id) === String(userOutletId))?.name || 'Cabang Anda'}</span>
+            </div>
+          ) : outlets && outlets.length > 0 ? (
+            <div className="flex items-center gap-1.5 bg-cream-50 px-3 py-1.5 rounded-xl border border-grey-border">
+              <Building2 className="w-4 h-4 text-emeraldsoft shrink-0" />
+              <select
+                value={outletFilter || ''}
+                onChange={(e) => setOutletFilter && setOutletFilter(e.target.value)}
+                className="bg-transparent text-xs font-semibold text-slate-dark outline-none cursor-pointer"
+              >
+                <option value="">{t('all_outlets')}</option>
+                {outlets.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    📍 {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-emeraldsoft" />
             <span className="text-[11px] font-semibold text-grey-soft">Start:</span>
@@ -248,6 +285,7 @@ export default function PaymentManager({
               <tr>
                 <th className="py-3.5 px-4">{t('th_code')}</th>
                 <th className="py-3.5 px-4">{t('th_customer')}</th>
+                <th className="py-3.5 px-4">{t('th_outlet')}</th>
                 <th className="py-3.5 px-4">{t('th_service')}</th>
                 <th className="py-3.5 px-4">{t('th_price')}</th>
                 <th className="py-3.5 px-4">{t('th_proof')}</th>
@@ -257,14 +295,14 @@ export default function PaymentManager({
             <tbody className="divide-y divide-grey-border">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-grey-soft">
+                  <td colSpan="7" className="py-8 text-center text-grey-soft">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emeraldsoft" />
                     <span>{t('loading_bookings')}</span>
                   </td>
                 </tr>
               ) : filteredPayments.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-grey-soft">
+                  <td colSpan="7" className="py-8 text-center text-grey-soft">
                     <span>{t('empty_payments')}</span>
                   </td>
                 </tr>
@@ -298,6 +336,18 @@ export default function PaymentManager({
                           </a>
                         )}
                       </div>
+                    </td>
+
+                    {/* Cabang Outlet */}
+                    <td className="py-4 px-4">
+                      {b.outlet_name ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cream-100 text-emeraldsoft font-bold text-xs border border-cream-200 shadow-2xs">
+                          <MapPin className="w-3.5 h-3.5 text-rosegold shrink-0" />
+                          <span>{b.outlet_name}</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-grey-soft italic">Semua Cabang</span>
+                      )}
                     </td>
 
                     {/* Services Breakdown */}

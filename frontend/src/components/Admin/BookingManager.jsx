@@ -18,7 +18,10 @@ export default function BookingManager({
   outlets,
   onRefresh,
   onOpenManualModal,
-  services
+  services,
+  userRole,
+  userOutletId,
+  userOutletName
 }) {
   const { t } = useLanguage();
   const [selectedProofs, setSelectedProofs] = useState(null);
@@ -27,6 +30,8 @@ export default function BookingManager({
   const [staffFilter, setStaffFilter] = useState('All');
   const [startDateFilter, setStartDateFilter] = useState('');
   const [endDateFilter, setEndDateFilter] = useState('');
+
+  const isBranchAdmin = userRole !== 'admin' && userOutletId;
 
   const getWhatsAppUrl = (phone) => {
     if (!phone) return '#';
@@ -201,8 +206,13 @@ export default function BookingManager({
             </select>
           </div>
 
-          {/* Outlet Filter */}
-          {outlets && outlets.length > 0 && (
+          {/* Outlet Filter (Super Admin sees dropdown, Outlet Admin sees fixed badge) */}
+          {isBranchAdmin ? (
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emeraldsoft/10 text-emeraldsoft border border-emeraldsoft/30 text-xs font-bold shadow-2xs">
+              <Building2 className="w-4 h-4 text-rosegold" />
+              <span>📍 {userOutletName || outlets?.find(o => String(o.id) === String(userOutletId))?.name || 'Cabang Anda'}</span>
+            </div>
+          ) : outlets && outlets.length > 0 ? (
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-emeraldsoft" />
               <select
@@ -216,7 +226,7 @@ export default function BookingManager({
                 ))}
               </select>
             </div>
-          )}
+          ) : null}
 
           {/* Service Filter */}
           <div className="flex items-center gap-2">

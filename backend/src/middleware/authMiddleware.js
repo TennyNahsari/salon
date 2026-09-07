@@ -18,7 +18,18 @@ const verifyAdminToken = (req, res, next) => {
   }
 };
 
+const requireSuperAdmin = (req, res, next) => {
+  if (!req.admin || req.admin.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Akses ditolak. Fitur ini hanya dapat diakses oleh Super Admin.'
+    });
+  }
+  next();
+};
+
 module.exports = {
   verifyAdminToken,
+  requireSuperAdmin,
   JWT_SECRET
 };

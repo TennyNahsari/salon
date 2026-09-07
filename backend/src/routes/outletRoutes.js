@@ -7,16 +7,16 @@ const {
   updateOutlet, 
   deleteOutlet 
 } = require('../controllers/outletController');
-const { verifyAdminToken } = require('../middleware/authMiddleware');
+const { verifyAdminToken, requireSuperAdmin } = require('../middleware/authMiddleware');
 
 // Public route to get all outlets
 router.get('/', getAllOutlets);
 router.get('/:id', getOutletById);
 
-// Admin protected routes
-router.post('/', verifyAdminToken, createOutlet);
-router.put('/:id', verifyAdminToken, updateOutlet);
-router.delete('/:id', verifyAdminToken, deleteOutlet);
+// Super Admin only routes for managing outlets
+router.post('/', verifyAdminToken, requireSuperAdmin, createOutlet);
+router.put('/:id', verifyAdminToken, requireSuperAdmin, updateOutlet);
+router.delete('/:id', verifyAdminToken, requireSuperAdmin, deleteOutlet);
 
 module.exports = router;
 

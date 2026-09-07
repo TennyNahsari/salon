@@ -103,24 +103,24 @@ export default function OutletManager() {
           fetchOutletsAndServices();
         }, 800);
       } else {
-        setMsg({ type: 'error', text: res.message || 'Gagal menyimpan data outlet.' });
+        setMsg({ type: 'error', text: res.message || t('err_save_outlet') });
       }
     } catch (err) {
-      setMsg({ type: 'error', text: err.response?.data?.message || 'Terjadi kesalahan.' });
+      setMsg({ type: 'error', text: err.response?.data?.message || t('err_save_outlet') });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Apakah Anda yakin ingin menghapus outlet "${name}"?`)) return;
+    if (!window.confirm(`${t('confirm_delete_outlet')} "${name}"?`)) return;
     try {
       const res = await deleteOutlet(id);
       if (res.success) {
         fetchOutletsAndServices();
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menghapus outlet.');
+      alert(err.response?.data?.message || t('err_delete_outlet'));
     }
   };
 
@@ -151,11 +151,11 @@ export default function OutletManager() {
       {/* Outlets List Table / Cards */}
       {loading ? (
         <div className="text-center py-12 bg-white rounded-2xl border border-grey-border">
-          <p className="text-grey-soft text-sm">Memuat data outlet cabang...</p>
+          <p className="text-grey-soft text-sm">{t('loading_outlets')}</p>
         </div>
       ) : outlets.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-2xl border border-grey-border p-8">
-          <p className="text-grey-soft">Belum ada outlet cabang yang terdaftar.</p>
+          <p className="text-grey-soft">{t('empty_outlets')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -167,7 +167,7 @@ export default function OutletManager() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${outlet.is_active ? 'bg-status-green/20 text-status-green border border-status-green/30' : 'bg-status-coral/20 text-status-coral border border-status-coral/30'}`}>
-                    {outlet.is_active ? '🟢 Aktif' : '🔴 Non-Aktif'}
+                    {outlet.is_active ? t('status_active_outlet') : t('status_inactive_outlet')}
                   </span>
                   <span className="text-xs font-mono text-grey-soft">ID: #{outlet.id}</span>
                 </div>
@@ -188,7 +188,7 @@ export default function OutletManager() {
 
                 <div className="pt-2 border-t border-cream-200">
                   <span className="text-[11px] font-bold text-emeraldsoft block mb-1">
-                    📋 Layanan Terhubung: ({outlet.service_ids?.length || 0} / {services.length})
+                    📋 {t('outlet_connected_services')}: ({outlet.service_ids?.length || 0} / {services.length})
                   </span>
                   <div className="flex flex-wrap gap-1">
                     {services.filter(s => outlet.service_ids?.includes(s.id)).slice(0, 4).map(s => (
@@ -198,7 +198,7 @@ export default function OutletManager() {
                     ))}
                     {outlet.service_ids?.length > 4 && (
                       <span className="px-2 py-0.5 bg-cream-200 text-slate-dark text-[10px] font-bold rounded-md">
-                        +{outlet.service_ids.length - 4} lainnya
+                        +{outlet.service_ids.length - 4} {t('outlet_others')}
                       </span>
                     )}
                   </div>
@@ -211,14 +211,14 @@ export default function OutletManager() {
                   className="px-3 py-1.5 rounded-lg bg-cream-100 border border-grey-border text-slate-dark font-semibold text-xs hover:bg-emeraldsoft hover:text-white transition-all flex items-center gap-1"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  <span>Edit</span>
+                  <span>{t('btn_edit')}</span>
                 </button>
                 <button
                   onClick={() => handleDelete(outlet.id, outlet.name)}
                   className="px-3 py-1.5 rounded-lg bg-status-coral/10 border border-status-coral/30 text-status-coral font-semibold text-xs hover:bg-status-coral hover:text-white transition-all flex items-center gap-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Hapus</span>
+                  <span>{t('btn_delete')}</span>
                 </button>
               </div>
 
@@ -235,7 +235,7 @@ export default function OutletManager() {
             <div className="bg-emeraldsoft p-6 text-white flex items-center justify-between">
               <h3 className="font-serif text-xl font-bold text-cream flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-rosegold" />
-                <span>{editingOutlet ? 'Edit Outlet Cabang' : 'Tambah Outlet Cabang Baru'}</span>
+                <span>{editingOutlet ? t('modal_edit_outlet_title') : t('modal_add_outlet_title')}</span>
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -255,11 +255,11 @@ export default function OutletManager() {
               
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                  Nama Outlet *
+                  {t('field_outlet_name')}
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Luxe Salon - Dharmawangsa"
+                  placeholder={t('placeholder_outlet_name')}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-rosegold outline-none text-sm text-slate-dark"
@@ -269,11 +269,11 @@ export default function OutletManager() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                  Alamat Lengkap *
+                  {t('field_outlet_address')}
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Jl. Dharmawangsa Raya No. 12, Jakarta Selatan"
+                  placeholder={t('placeholder_outlet_address')}
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-rosegold outline-none text-sm text-slate-dark resize-none"
@@ -284,11 +284,11 @@ export default function OutletManager() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                    No. Telepon / HP
+                    {t('field_outlet_phone')}
                   </label>
                   <input
                     type="text"
-                    placeholder="081234567890"
+                    placeholder={t('placeholder_outlet_phone')}
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-rosegold outline-none text-sm text-slate-dark"
@@ -297,7 +297,7 @@ export default function OutletManager() {
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
-                    Status Operasional
+                    {t('field_outlet_status')}
                   </label>
                   <div className="flex items-center gap-3 pt-2">
                     <input
@@ -308,7 +308,7 @@ export default function OutletManager() {
                       className="w-5 h-5 accent-emeraldsoft rounded cursor-pointer"
                     />
                     <label htmlFor="is_active" className="text-sm font-semibold text-slate-dark cursor-pointer">
-                      Outlet Aktif & Beroperasi
+                      {t('outlet_active_label')}
                     </label>
                   </div>
                 </div>
@@ -349,7 +349,7 @@ export default function OutletManager() {
                   onClick={() => setIsModalOpen(false)}
                   className="px-5 py-2.5 rounded-xl border border-grey-border text-slate-dark font-bold text-sm hover:bg-cream-100"
                 >
-                  Batal
+                  {t('btn_cancel')}
                 </button>
 
                 <button
@@ -357,7 +357,7 @@ export default function OutletManager() {
                   disabled={saving}
                   className="px-6 py-2.5 rounded-xl bg-emeraldsoft text-white font-bold text-sm hover:bg-emeraldsoft-dark disabled:opacity-50"
                 >
-                  {saving ? 'Menyimpan...' : 'Simpan Outlet'}
+                  {saving ? t('btn_saving') : t('btn_save_outlet')}
                 </button>
               </div>
 

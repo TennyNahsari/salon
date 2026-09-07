@@ -2,17 +2,7 @@
 -- INIT DATABASE & SCHEMA UNTUK APLIKASI SALON & SPA (POSTGRESQL)
 -- ============================================================
 
--- 1. TABEL USERS (Admin & Operator Salon)
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    name VARCHAR(150) NOT NULL,
-    role VARCHAR(50) DEFAULT 'admin',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 2. TABEL OUTLETS (Cabang Salon & Spa)
+-- 1. TABEL OUTLETS (Cabang Salon & Spa)
 CREATE TABLE IF NOT EXISTS outlets (
     id SERIAL PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
@@ -23,6 +13,20 @@ CREATE TABLE IF NOT EXISTS outlets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 2. TABEL USERS (Admin & Operator Cabang Salon)
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    role VARCHAR(50) DEFAULT 'admin',
+    outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Safe migration for existing users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL;
+
 -- 3. TABEL SERVICES (Layanan Salon & Spa)
 CREATE TABLE IF NOT EXISTS services (
     id SERIAL PRIMARY KEY,
@@ -31,8 +35,12 @@ CREATE TABLE IF NOT EXISTS services (
     price DECIMAL(12, 2) NOT NULL,
     description TEXT,
     image_url TEXT,
+    created_by_outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Safe migration for existing services table
+ALTER TABLE services ADD COLUMN IF NOT EXISTS created_by_outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL;
 
 -- 4. TABEL OUTLET_SERVICES (Mapping Layanan per Outlet)
 CREATE TABLE IF NOT EXISTS outlet_services (
@@ -106,13 +114,6 @@ CREATE TABLE IF NOT EXISTS booking_items (
 -- INSERT SEED DATA (USER ADMIN, OUTLETS, SERVICES, CONFIGS & STAFF)
 -- ============================================================
 
--- Insert Admin & Operator User dengan Passwords Bcrypt Hashed:
-INSERT INTO users (username, password, name, role) VALUES 
-('admin', '$2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76', 'Super Admin Salon', 'admin'),
-('operator', '$2b$10$/zONVBMzfjDp3k6STm8r/eJFGTZLNcfqB6h0.MLqD8596fkk2kNG6', 'Salon Operator', 'operator')
-ON CONFLICT (username) DO UPDATE 
-SET password = EXCLUDED.password, name = EXCLUDED.name, role = EXCLUDED.role;
-
 -- Seed Data Outlets
 INSERT INTO outlets (id, name, address, phone, image_url, is_active) VALUES
 (1, 'Luxe Salon - Dharmawangsa', 'Jl. Dharmawangsa Raya No. 12, Kebayoran Baru, Jakarta Selatan', '081234567890', 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80', true),
@@ -121,6 +122,14 @@ INSERT INTO outlets (id, name, address, phone, image_url, is_active) VALUES
 ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('outlets_id_seq', (SELECT MAX(id) FROM outlets));
+
+-- Insert Super Admin & Branch Operator Users dengan Passwords Bcrypt Hashed ('admin123'):
+INSERT INTO users (username, password, name, role, outlet_id) VALUES 
+('admin', '$2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76', 'Super Admin Salon', 'admin', NULL),
+('operator_dharmawangsa', '$2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76', 'Operator Dharmawangsa', 'outlet_admin', 1),
+('operator_kemang', '$2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76', 'Operator Kemang', 'outlet_admin', 2)
+ON CONFLICT (username) DO UPDATE 
+SET password = EXCLUDED.password, name = EXCLUDED.name, role = EXCLUDED.role, outlet_id = EXCLUDED.outlet_id;
 
 -- Seed Data Configs
 INSERT INTO configs (key, value, description) VALUES 
@@ -137,14 +146,14 @@ INSERT INTO configs (key, value, description) VALUES
 ('social_threads', 'https://threads.net', 'URL Threads')
 ON CONFLICT (key) DO NOTHING;
 
--- Seed Data Services
-INSERT INTO services (id, name, duration_minutes, price, description, image_url) VALUES
-(1, 'Hair Spa Aromatherapy', 60, 150000, 'Perawatan rambut mendalam dengan nutrisi ginseng dan pijat relaksasi kulit kepala.', 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80'),
-(2, 'Premium Haircut & Styling', 45, 85000, 'Potong rambut profesional disesuaikan dengan bentuk wajah + cuci & blow dry.', 'https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=600&q=80'),
-(3, 'Organic Facial Treatment', 60, 180000, 'Perawatan wajah alami untuk mencerahkan, mengenyalkan, dan mengecilkan pori-pori.', 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80'),
-(4, 'Relaxing Body Massage', 90, 220000, 'Pijat relaksasi seluruh tubuh dengan essential oil lavender pilihan.', 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=600&q=80'),
-(5, 'Luxe Gel Manicure & Pedicure', 60, 135000, 'Perawatan kuku tangan dan kaki premium dengan pembersihan kutikula & cat gel tahan lama.', 'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=600&q=80'),
-(6, 'Hair Coloring & Highlight', 120, 350000, 'Pewarnaan rambut profesional menggunakan cat vegan tanpa merusak struktur rambut.', 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80')
+-- Seed Data Services (Master Services created by Super Admin, created_by_outlet_id = NULL)
+INSERT INTO services (id, name, duration_minutes, price, description, image_url, created_by_outlet_id) VALUES
+(1, 'Hair Spa Aromatherapy', 60, 150000, 'Perawatan rambut mendalam dengan nutrisi ginseng dan pijat relaksasi kulit kepala.', 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80', NULL),
+(2, 'Premium Haircut & Styling', 45, 85000, 'Potong rambut profesional disesuaikan dengan bentuk wajah + cuci & blow dry.', 'https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=600&q=80', NULL),
+(3, 'Organic Facial Treatment', 60, 180000, 'Perawatan wajah alami untuk mencerahkan, mengenyalkan, dan mengecilkan pori-pori.', 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80', NULL),
+(4, 'Relaxing Body Massage', 90, 220000, 'Pijat relaksasi seluruh tubuh dengan essential oil lavender pilihan.', 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=600&q=80', NULL),
+(5, 'Luxe Gel Manicure & Pedicure', 60, 135000, 'Perawatan kuku tangan dan kaki premium dengan pembersihan kutikula & cat gel tahan lama.', 'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=600&q=80', NULL),
+(6, 'Hair Coloring & Highlight', 120, 350000, 'Pewarnaan rambut profesional menggunakan cat vegan tanpa merusak struktur rambut.', 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80', NULL)
 ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('services_id_seq', (SELECT MAX(id) FROM services));
@@ -177,4 +186,3 @@ INSERT INTO staff_services (staff_id, service_id) VALUES
 (5, 3), (5, 5),
 (6, 1), (6, 4), (6, 5)
 ON CONFLICT DO NOTHING;
-

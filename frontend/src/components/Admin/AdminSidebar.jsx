@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, CalendarCheck, Scissors, CreditCard, LogOut, Sparkles, Home, ExternalLink, Users, Globe, Menu, X, Building2 } from 'lucide-react';
+import { 
+  LayoutDashboard, CalendarCheck, Scissors, CreditCard, LogOut, Sparkles, Home, 
+  ExternalLink, Users, Globe, Menu, X, Building2, ShieldCheck, MapPin 
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -8,15 +11,20 @@ export default function AdminSidebar({ activeTab, setActiveTab, onGoHome }) {
   const { lang, toggleLang, t } = useLanguage();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const menuItems = [
-    { id: 'overview', label: t('menu_overview'), icon: LayoutDashboard },
-    { id: 'outlets', label: t('menu_outlets'), icon: Building2 },
-    { id: 'bookings', label: t('menu_bookings'), icon: CalendarCheck },
-    { id: 'payments_module', label: t('menu_payments_module'), icon: CreditCard },
-    { id: 'services', label: t('menu_services'), icon: Scissors },
-    { id: 'staff', label: t('menu_staff'), icon: Users },
-    { id: 'payment', label: t('menu_payment_config'), icon: CreditCard },
+  const isSuperAdmin = admin?.role === 'admin';
+
+  const allMenuItems = [
+    { id: 'overview', label: t('menu_overview'), icon: LayoutDashboard, adminOnly: false },
+    { id: 'outlets', label: t('menu_outlets'), icon: Building2, adminOnly: true },
+    { id: 'bookings', label: t('menu_bookings'), icon: CalendarCheck, adminOnly: false },
+    { id: 'payments_module', label: t('menu_payments_module'), icon: CreditCard, adminOnly: false },
+    { id: 'services', label: t('menu_services'), icon: Scissors, adminOnly: false },
+    { id: 'staff', label: t('menu_staff'), icon: Users, adminOnly: false },
+    { id: 'users', label: t('menu_users'), icon: ShieldCheck, adminOnly: true },
+    { id: 'payment', label: t('menu_payment_config'), icon: CreditCard, adminOnly: true },
   ];
+
+  const menuItems = allMenuItems.filter(item => !item.adminOnly || isSuperAdmin);
 
   const handleNavClick = (id) => {
     setActiveTab(id);
@@ -81,9 +89,32 @@ export default function AdminSidebar({ activeTab, setActiveTab, onGoHome }) {
           </div>
 
           {/* User Info Badge */}
-          <div className="bg-white/10 p-3 rounded-xl text-xs space-y-0.5">
-            <span className="text-cream-200/70 block">{t('admin_logged_as')}</span>
-            <span className="font-bold text-rosegold text-sm block">👤 {admin?.username || 'Admin'}</span>
+          <div className="bg-white/10 p-3.5 rounded-2xl text-xs space-y-1 border border-white/5">
+            <span className="text-cream-200/70 text-[11px] block">{t('admin_logged_as')}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-rosegold text-sm block truncate">
+                {isSuperAdmin ? '👑' : '👤'} {admin?.name || admin?.username || 'Admin'}
+              </span>
+            </div>
+            <div className="pt-0.5">
+              {isSuperAdmin ? (
+                <span className="inline-block px-2 py-0.5 rounded-md bg-rosegold/20 text-rosegold-light text-[10px] font-bold">
+                  {t('role_super_admin')}
+                </span>
+              ) : (
+                <div className="space-y-0.5">
+                  <span className="inline-block px-2 py-0.5 rounded-md bg-white/20 text-cream text-[10px] font-bold">
+                    {t('role_outlet_admin')}
+                  </span>
+                  {admin?.outlet_name && (
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-cream-200 mt-1">
+                      <MapPin className="w-3 h-3 text-rosegold" />
+                      <span>{admin.outlet_name}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Nav Items */}
