@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, CalendarCheck, Scissors, CreditCard, LogOut, Sparkles, Home, ExternalLink, Users, Globe, Menu, X } from 'lucide-react';
+import { LayoutDashboard, CalendarCheck, Scissors, CreditCard, LogOut, Sparkles, Home, ExternalLink, Users, Globe, Menu, X, Building2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -10,6 +10,7 @@ export default function AdminSidebar({ activeTab, setActiveTab, onGoHome }) {
 
   const menuItems = [
     { id: 'overview', label: t('menu_overview'), icon: LayoutDashboard },
+    { id: 'outlets', label: t('menu_outlets'), icon: Building2 },
     { id: 'bookings', label: t('menu_bookings'), icon: CalendarCheck },
     { id: 'payments_module', label: t('menu_payments_module'), icon: CreditCard },
     { id: 'services', label: t('menu_services'), icon: Scissors },

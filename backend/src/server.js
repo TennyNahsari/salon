@@ -11,6 +11,7 @@ const configRoutes = require('./routes/configRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const outletRoutes = require('./routes/outletRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,6 +30,7 @@ app.use('/api/configs', configRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/outlets', outletRoutes);
 
 // Base route
 app.get('/', (req, res) => {

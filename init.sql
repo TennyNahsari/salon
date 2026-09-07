@@ -12,7 +12,18 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. TABEL SERVICES (Layanan Salon & Spa)
+-- 2. TABEL OUTLETS (Cabang Salon & Spa)
+CREATE TABLE IF NOT EXISTS outlets (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    address TEXT NOT NULL,
+    phone VARCHAR(50),
+    image_url TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. TABEL SERVICES (Layanan Salon & Spa)
 CREATE TABLE IF NOT EXISTS services (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -23,13 +34,21 @@ CREATE TABLE IF NOT EXISTS services (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. TABEL BOOKINGS (Pemesanan Layanan)
+-- 4. TABEL OUTLET_SERVICES (Mapping Layanan per Outlet)
+CREATE TABLE IF NOT EXISTS outlet_services (
+    outlet_id INT REFERENCES outlets(id) ON DELETE CASCADE,
+    service_id INT REFERENCES services(id) ON DELETE CASCADE,
+    PRIMARY KEY (outlet_id, service_id)
+);
+
+-- 5. TABEL BOOKINGS (Pemesanan Layanan)
 CREATE TABLE IF NOT EXISTS bookings (
     id SERIAL PRIMARY KEY,
     booking_code VARCHAR(50) UNIQUE NOT NULL,
     customer_name VARCHAR(255) NOT NULL,
     customer_phone VARCHAR(50) NOT NULL,
     customer_email VARCHAR(255) NOT NULL,
+    outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL,
     service_id INT REFERENCES services(id) ON DELETE SET NULL,
     staff_name VARCHAR(100) DEFAULT 'Bebas / Any Staff',
     booking_datetime TIMESTAMP NOT NULL,
@@ -41,7 +60,10 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. TABEL CONFIGS (Pengaturan Pembayaran & Kontak)
+-- Safe migration for existing bookings table
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL;
+
+-- 6. TABEL CONFIGS (Pengaturan Pembayaran & Kontak)
 CREATE TABLE IF NOT EXISTS configs (
     id SERIAL PRIMARY KEY,
     key VARCHAR(100) UNIQUE NOT NULL,
@@ -50,23 +72,27 @@ CREATE TABLE IF NOT EXISTS configs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. TABEL STAFF (Terapis / Stylist)
+-- 7. TABEL STAFF (Terapis / Stylist)
 CREATE TABLE IF NOT EXISTS staff (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     role VARCHAR(100) DEFAULT 'Stylist / Therapist',
+    outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. TABEL STAFF_SERVICES (Relasi Staff & Layanan)
+-- Safe migration for existing staff table
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS outlet_id INT REFERENCES outlets(id) ON DELETE SET NULL;
+
+-- 8. TABEL STAFF_SERVICES (Relasi Staff & Layanan)
 CREATE TABLE IF NOT EXISTS staff_services (
     staff_id INT REFERENCES staff(id) ON DELETE CASCADE,
     service_id INT REFERENCES services(id) ON DELETE CASCADE,
     PRIMARY KEY (staff_id, service_id)
 );
 
--- 7. TABEL BOOKING_ITEMS (Multi-Service / Merged Bookings)
+-- 9. TABEL BOOKING_ITEMS (Multi-Service / Merged Bookings)
 CREATE TABLE IF NOT EXISTS booking_items (
     id SERIAL PRIMARY KEY,
     booking_id INT REFERENCES bookings(id) ON DELETE CASCADE,
@@ -77,17 +103,24 @@ CREATE TABLE IF NOT EXISTS booking_items (
 );
 
 -- ============================================================
--- INSERT SEED DATA (USER ADMIN, SERVICES, CONFIGS & STAFF)
+-- INSERT SEED DATA (USER ADMIN, OUTLETS, SERVICES, CONFIGS & STAFF)
 -- ============================================================
 
 -- Insert Admin & Operator User dengan Passwords Bcrypt Hashed:
--- admin    : admin123 -> $2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76
--- operator : op123    -> $2b$10$/zONVBMzfjDp3k6STm8r/eJFGTZLNcfqB6h0.MLqD8596fkk2kNG6
 INSERT INTO users (username, password, name, role) VALUES 
 ('admin', '$2b$10$wOpg7x95grL3FqD0J6ZNbe2lMSHIEG81iuHlB0NVcEEgQ8Uggsb76', 'Super Admin Salon', 'admin'),
 ('operator', '$2b$10$/zONVBMzfjDp3k6STm8r/eJFGTZLNcfqB6h0.MLqD8596fkk2kNG6', 'Salon Operator', 'operator')
 ON CONFLICT (username) DO UPDATE 
 SET password = EXCLUDED.password, name = EXCLUDED.name, role = EXCLUDED.role;
+
+-- Seed Data Outlets
+INSERT INTO outlets (id, name, address, phone, image_url, is_active) VALUES
+(1, 'Luxe Salon - Dharmawangsa', 'Jl. Dharmawangsa Raya No. 12, Kebayoran Baru, Jakarta Selatan', '081234567890', 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80', true),
+(2, 'Luxe Salon - Kemang Flagship', 'Jl. Kemang Raya No. 45, Bangka, Jakarta Selatan', '081987654321', 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80', true),
+(3, 'Luxe Salon - Bintaro Studio', 'Bintaro Jaya Sektor 7 No. 88, Tangerang Selatan', '081311223344', 'https://images.unsplash.com/photo-1600948836101-f9ffda59d250?auto=format&fit=crop&w=600&q=80', true)
+ON CONFLICT (id) DO NOTHING;
+
+SELECT setval('outlets_id_seq', (SELECT MAX(id) FROM outlets));
 
 -- Seed Data Configs
 INSERT INTO configs (key, value, description) VALUES 
@@ -116,15 +149,22 @@ ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('services_id_seq', (SELECT MAX(id) FROM services));
 
+-- Seed Data Outlet Services Mapping
+INSERT INTO outlet_services (outlet_id, service_id) VALUES
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6),
+(2, 1), (2, 2), (2, 4), (2, 6),
+(3, 2), (3, 3), (3, 5)
+ON CONFLICT DO NOTHING;
+
 -- Seed Data Staff
-INSERT INTO staff (id, name, role, is_active) VALUES 
-(1, 'Stylist Anita', 'Senior Hair Stylist', true),
-(2, 'Therapist Maya', 'Beauty & Massage Specialist', true),
-(3, 'Stylist Budi', 'Hair Coloring Specialist', true),
-(4, 'Stylist Rina', 'Junior Hair Stylist', true),
-(5, 'Therapist Sinta', 'Facial & Nail Specialist', true),
-(6, 'Capster Dewi', 'Hair & Creambath Specialist', true)
-ON CONFLICT (id) DO NOTHING;
+INSERT INTO staff (id, name, role, outlet_id, is_active) VALUES 
+(1, 'Stylist Anita', 'Senior Hair Stylist', 1, true),
+(2, 'Therapist Maya', 'Beauty & Massage Specialist', 1, true),
+(3, 'Stylist Budi', 'Hair Coloring Specialist', 2, true),
+(4, 'Stylist Rina', 'Junior Hair Stylist', 2, true),
+(5, 'Therapist Sinta', 'Facial & Nail Specialist', 3, true),
+(6, 'Capster Dewi', 'Hair & Creambath Specialist', 3, true)
+ON CONFLICT (id) DO UPDATE SET outlet_id = EXCLUDED.outlet_id;
 
 SELECT setval('staff_id_seq', (SELECT MAX(id) FROM staff));
 
@@ -137,3 +177,4 @@ INSERT INTO staff_services (staff_id, service_id) VALUES
 (5, 3), (5, 5),
 (6, 1), (6, 4), (6, 5)
 ON CONFLICT DO NOTHING;
+

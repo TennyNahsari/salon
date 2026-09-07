@@ -1,31 +1,40 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Scissors, Clock, Tag, X, Image as ImageIcon, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, Scissors, Clock, Tag, X, Image as ImageIcon, Download, Building2 } from 'lucide-react';
 import { createService, updateService, deleteService } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
 
-export default function ServiceManager({ services, loading, onRefresh }) {
+
+export default function ServiceManager({ services, loading, onRefresh, outlets }) {
   const { t } = useLanguage();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
 
   const handleExportExcel = () => {
-    const headers = ['ID Layanan', 'Nama Layanan', 'Durasi (Menit)', 'Harga (Rp)', 'Deskripsi'];
-    const rows = (services || []).map(s => [
-      s.id,
-      s.name,
-      s.duration_minutes,
-      Number(s.price),
-      s.description || '-'
-    ]);
+    const headers = ['ID Layanan', 'Nama Layanan', 'Cabang Outlet', 'Durasi (Menit)', 'Harga (Rp)', 'Deskripsi'];
+    const rows = (services || []).map(s => {
+      const mappedOutlets = (outlets || [])
+        .filter(o => (s.outlet_ids || []).includes(o.id))
+        .map(o => o.name);
+      return [
+        s.id,
+        s.name,
+        mappedOutlets.length > 0 ? mappedOutlets.join(', ') : 'Semua Outlet',
+        s.duration_minutes,
+        Number(s.price),
+        s.description || '-'
+      ];
+    });
     exportToCSV('Data_Layanan_LuxeSalon', headers, rows);
   };
+
   const [formData, setFormData] = useState({
     name: '',
     duration_minutes: 60,
     price: 100000,
     description: '',
-    image_url: ''
+    image_url: '',
+    outlet_ids: []
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -37,7 +46,8 @@ export default function ServiceManager({ services, loading, onRefresh }) {
       duration_minutes: 60,
       price: 150000,
       description: '',
-      image_url: 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80'
+      image_url: 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80',
+      outlet_ids: outlets ? outlets.map(o => o.id) : []
     });
     setError('');
     setModalOpen(true);
@@ -50,10 +60,22 @@ export default function ServiceManager({ services, loading, onRefresh }) {
       duration_minutes: service.duration_minutes,
       price: service.price,
       description: service.description || '',
-      image_url: service.image_url || ''
+      image_url: service.image_url || '',
+      outlet_ids: Array.isArray(service.outlet_ids) ? service.outlet_ids : []
     });
     setError('');
     setModalOpen(true);
+  };
+
+  const handleToggleOutlet = (outletId) => {
+    setFormData(prev => {
+      const current = prev.outlet_ids || [];
+      if (current.includes(outletId)) {
+        return { ...prev, outlet_ids: current.filter(id => id !== outletId) };
+      } else {
+        return { ...prev, outlet_ids: [...current, outletId] };
+      }
+    });
   };
 
   const handleDelete = async (id) => {
@@ -128,6 +150,7 @@ export default function ServiceManager({ services, loading, onRefresh }) {
               <tr className="bg-cream-100 border-b border-grey-border text-xs uppercase font-bold text-slate-dark tracking-wider">
                 <th className="py-4 px-4">{t('th_image')}</th>
                 <th className="py-4 px-4">{t('th_service')}</th>
+                <th className="py-4 px-4">{t('th_outlet')}</th>
                 <th className="py-4 px-4">{t('th_duration')}</th>
                 <th className="py-4 px-4">{t('th_price')}</th>
                 <th className="py-4 px-4">{t('th_description')}</th>
@@ -137,50 +160,69 @@ export default function ServiceManager({ services, loading, onRefresh }) {
             <tbody className="divide-y divide-cream-200 text-xs sm:text-sm text-slate-dark">
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-grey-soft">Memuat layanan...</td>
+                  <td colSpan="7" className="text-center py-12 text-grey-soft">Memuat layanan...</td>
                 </tr>
               ) : services.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="text-center py-12 text-grey-soft">Belum ada data layanan.</td>
+                  <td colSpan="7" className="text-center py-12 text-grey-soft">Belum ada data layanan.</td>
                 </tr>
               ) : (
-                services.map((s) => (
-                  <tr key={s.id} className="hover:bg-cream-50/60 transition-colors">
-                    <td className="py-3 px-4">
-                      <img
-                        src={s.image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80'}
-                        alt={s.name}
-                        className="w-12 h-12 object-cover rounded-xl border border-grey-border"
-                      />
-                    </td>
-                    <td className="py-3 px-4 font-bold text-emeraldsoft">{s.name}</td>
-                    <td className="py-3 px-4 font-medium">{s.duration_minutes} Menit</td>
-                    <td className="py-3 px-4 font-bold text-slate-dark">
-                      Rp {Number(s.price).toLocaleString('id-ID')}
-                    </td>
-                    <td className="py-3 px-4 text-grey-soft max-w-xs truncate">
-                      {s.description || '-'}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(s)}
-                          className="p-2 rounded-lg bg-cream-200 text-slate-dark hover:bg-rosegold hover:text-white transition-colors"
-                          title="Edit Layanan"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(s.id)}
-                          className="p-2 rounded-lg bg-status-coral/10 text-status-coral hover:bg-status-coral hover:text-white transition-colors"
-                          title="Hapus Layanan"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                services.map((s) => {
+                  const mappedOutlets = (outlets || []).filter(o => (s.outlet_ids || []).includes(o.id));
+                  return (
+                    <tr key={s.id} className="hover:bg-cream-50/60 transition-colors">
+                      <td className="py-3 px-4">
+                        <img
+                          src={s.image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80'}
+                          alt={s.name}
+                          className="w-12 h-12 object-cover rounded-xl border border-grey-border"
+                        />
+                      </td>
+                      <td className="py-3 px-4 font-bold text-emeraldsoft">{s.name}</td>
+                      
+                      {/* Outlets Badges */}
+                      <td className="py-3 px-4 max-w-xs">
+                        <div className="flex flex-wrap gap-1">
+                          {mappedOutlets.length > 0 ? (
+                            mappedOutlets.map(o => (
+                              <span key={o.id} className="px-2 py-0.5 rounded bg-cream-100 border border-cream-200 text-[11px] font-semibold text-slate-dark">
+                                📍 {o.name.replace('Luxe Salon - ', '')}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-status-coral italic">Belum di-assign</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 font-medium">{s.duration_minutes} Menit</td>
+                      <td className="py-3 px-4 font-bold text-slate-dark">
+                        Rp {Number(s.price).toLocaleString('id-ID')}
+                      </td>
+                      <td className="py-3 px-4 text-grey-soft max-w-xs truncate">
+                        {s.description || '-'}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenEdit(s)}
+                            className="p-2 rounded-lg bg-cream-200 text-slate-dark hover:bg-rosegold hover:text-white transition-colors"
+                            title="Edit Layanan"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            className="p-2 rounded-lg bg-status-coral/10 text-status-coral hover:bg-status-coral hover:text-white transition-colors"
+                            title="Hapus Layanan"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -203,7 +245,7 @@ export default function ServiceManager({ services, loading, onRefresh }) {
 
             {error && <div className="mx-6 mt-4 p-3 rounded-xl bg-status-coral/10 text-status-coral text-xs font-semibold">⚠️ {error}</div>}
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
               <div>
                 <label className="block text-xs font-semibold uppercase text-slate-dark mb-1">Nama Layanan *</label>
                 <input
@@ -214,6 +256,35 @@ export default function ServiceManager({ services, loading, onRefresh }) {
                   className="w-full px-4 py-2 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm"
                   required
                 />
+              </div>
+
+              {/* Outlet Assignment Checkboxes */}
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-dark mb-2 flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-emeraldsoft" />
+                  <span>Sediakan Layanan Ini di Outlet Cabang Mana? *</span>
+                </label>
+                <div className="space-y-2 max-h-40 overflow-y-auto p-3 rounded-xl border border-grey-border bg-cream-50">
+                  {(outlets || []).map((o) => {
+                    const isChecked = (formData.outlet_ids || []).includes(o.id);
+                    return (
+                      <label
+                        key={o.id}
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors border ${
+                          isChecked ? 'bg-white border-emeraldsoft shadow-xs font-semibold' : 'hover:bg-white/50 border-transparent text-grey-soft'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleOutlet(o.id)}
+                          className="w-4 h-4 text-emeraldsoft rounded focus:ring-emeraldsoft accent-emeraldsoft"
+                        />
+                        <span className="text-xs text-slate-dark">📍 {o.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -283,3 +354,4 @@ export default function ServiceManager({ services, loading, onRefresh }) {
     </div>
   );
 }
+

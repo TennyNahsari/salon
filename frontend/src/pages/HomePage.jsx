@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import HeroSection from '../components/HeroSection';
+import OutletSelector from '../components/OutletSelector';
 import ServiceList from '../components/ServiceList';
 import TestimonialSection from '../components/TestimonialSection';
 import Footer from '../components/Footer';
 import BookingModal from '../components/BookingModal';
 import AfterBookingModal from '../components/AfterBookingModal';
 import CheckStatusModal from '../components/CheckStatusModal';
-import { getServices, getConfigs } from '../services/api';
+import { getOutlets, getServices, getConfigs } from '../services/api';
 import { MessageCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
 export default function HomePage({ onGoAdminLogin }) {
   const { t } = useLanguage();
+  
+  // Outlets & Services state
+  const [outlets, setOutlets] = useState([]);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
+  const [loadingOutlets, setLoadingOutlets] = useState(true);
+
   const [services, setServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(true);
   const [whatsappNumber, setWhatsappNumber] = useState('6281234567890');
@@ -28,14 +35,37 @@ export default function HomePage({ onGoAdminLogin }) {
   const [isCheckStatusOpen, setIsCheckStatusOpen] = useState(false);
 
   useEffect(() => {
-    fetchServicesData();
+    fetchOutletsData();
     fetchConfigsData();
   }, []);
 
-  const fetchServicesData = async () => {
+  useEffect(() => {
+    if (selectedOutlet) {
+      fetchServicesData(selectedOutlet.id);
+    } else {
+      fetchServicesData(null);
+    }
+  }, [selectedOutlet]);
+
+  const fetchOutletsData = async () => {
+    try {
+      setLoadingOutlets(true);
+      const res = await getOutlets(true); // Active only
+      if (res.success && res.outlets.length > 0) {
+        setOutlets(res.outlets);
+        setSelectedOutlet(res.outlets[0]);
+      }
+    } catch (err) {
+      console.error('Error loading outlets:', err);
+    } finally {
+      setLoadingOutlets(false);
+    }
+  };
+
+  const fetchServicesData = async (outletId = null) => {
     try {
       setLoadingServices(true);
-      const res = await getServices();
+      const res = await getServices(outletId);
       if (res.success) {
         setServices(res.services);
       }
@@ -87,9 +117,17 @@ export default function HomePage({ onGoAdminLogin }) {
       <main className="flex-grow">
         <HeroSection onBookingClick={() => handleOpenBooking()} />
         
+        <OutletSelector
+          outlets={outlets}
+          selectedOutlet={selectedOutlet}
+          onSelectOutlet={(outlet) => setSelectedOutlet(outlet)}
+          loading={loadingOutlets}
+        />
+
         <ServiceList
           services={services}
           loading={loadingServices}
+          selectedOutlet={selectedOutlet}
           onSelectService={(service) => handleOpenBooking(service)}
         />
 
@@ -122,6 +160,8 @@ export default function HomePage({ onGoAdminLogin }) {
         onClose={() => setIsBookingOpen(false)}
         selectedService={selectedService}
         services={services}
+        outlets={outlets}
+        selectedOutlet={selectedOutlet}
         onSuccessBooking={handleSuccessBooking}
       />
 
@@ -140,4 +180,5 @@ export default function HomePage({ onGoAdminLogin }) {
     </div>
   );
 }
+
 

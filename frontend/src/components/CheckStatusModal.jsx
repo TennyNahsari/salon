@@ -226,6 +226,13 @@ export default function CheckStatusModal({ isOpen, onClose }) {
                   <span className="font-semibold text-slate-dark">{item.customer_name}</span>
                 </div>
 
+                {item.outlet_name && (
+                  <div className="flex justify-between">
+                    <span className="text-grey-soft">Cabang Outlet:</span>
+                    <span className="font-semibold text-emeraldsoft">📍 {item.outlet_name}</span>
+                  </div>
+                )}
+
                 {/* Sub-items list */}
                 <div className="p-3 rounded-lg bg-cream-50 border border-cream-200 space-y-1.5">
                   <span className="text-[11px] font-bold text-emeraldsoft uppercase tracking-wider block">

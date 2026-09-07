@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, User, Phone, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Clock, User, Phone, Mail, Sparkles, CheckCircle2, Building2, MapPin } from 'lucide-react';
 import { createBooking } from '../services/api';
 import { useLanguage } from '../context/LanguageContext';
 
-export default function BookingModal({ isOpen, onClose, selectedService, services, onSuccessBooking }) {
+export default function BookingModal({ isOpen, onClose, selectedService, services, outlets, selectedOutlet, onSuccessBooking }) {
   const { t } = useLanguage();
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
+    outlet_id: selectedOutlet?.id || '',
     service_id: '',
     staff_name: 'Bebas / Any Staff',
     date: new Date().toISOString().split('T')[0],
@@ -20,6 +21,12 @@ export default function BookingModal({ isOpen, onClose, selectedService, service
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (selectedOutlet) {
+      setFormData(prev => ({ ...prev, outlet_id: selectedOutlet.id }));
+    }
+  }, [selectedOutlet]);
+
+  useEffect(() => {
     if (selectedService) {
       setFormData(prev => ({ ...prev, service_id: selectedService.id }));
     } else if (services && services.length > 0 && !formData.service_id) {
@@ -28,6 +35,8 @@ export default function BookingModal({ isOpen, onClose, selectedService, service
   }, [selectedService, services]);
 
   if (!isOpen) return null;
+
+  const currentOutletObj = outlets?.find(o => o.id === Number(formData.outlet_id)) || selectedOutlet;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,6 +54,7 @@ export default function BookingModal({ isOpen, onClose, selectedService, service
         customer_name: formData.customer_name,
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email,
+        outlet_id: formData.outlet_id ? Number(formData.outlet_id) : null,
         service_id: Number(formData.service_id),
         staff_name: formData.staff_name,
         booking_datetime: combinedDatetime,
@@ -92,8 +102,19 @@ export default function BookingModal({ isOpen, onClose, selectedService, service
           </div>
         )}
 
+        {/* Outlet Location Info Badge */}
+        {currentOutletObj && (
+          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-cream-100 border border-rosegold/30 text-slate-dark text-xs leading-relaxed flex items-start gap-2.5 shadow-sm">
+            <Building2 className="w-5 h-5 text-rosegold shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-emeraldsoft block text-sm">{currentOutletObj.name}</span>
+              <span className="text-grey-soft text-[11px] block">{currentOutletObj.address}</span>
+            </div>
+          </div>
+        )}
+
         {/* Info Banner for Multi-Service Merging */}
-        <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-emeraldsoft/10 border border-emeraldsoft/30 text-emeraldsoft text-xs leading-relaxed font-medium flex items-start gap-2.5">
+        <div className="mx-6 mt-3 p-3 rounded-2xl bg-emeraldsoft/10 border border-emeraldsoft/30 text-emeraldsoft text-xs leading-relaxed font-medium flex items-start gap-2.5">
           <span className="text-base">💡</span>
           <span>{t('modal_booking_info')}</span>
         </div>
@@ -101,6 +122,27 @@ export default function BookingModal({ isOpen, onClose, selectedService, service
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           
+          {/* Outlet Selection */}
+          {outlets && outlets.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
+                {t('field_outlet')}
+              </label>
+              <select
+                value={formData.outlet_id}
+                onChange={(e) => setFormData({ ...formData, outlet_id: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-rosegold focus:ring-1 focus:ring-rosegold outline-none text-slate-dark font-medium bg-cream-50 text-sm"
+                required
+              >
+                {outlets.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    📍 {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Service Selection */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">

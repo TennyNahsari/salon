@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, Filter, Plus, Calendar, Clock, CheckCircle2, Eye, XCircle, ChevronRight, FileText, Image as ImageIcon, Trash2, Users, Scissors, Download, MessageCircle } from 'lucide-react';
+import { RefreshCw, Filter, Plus, Calendar, Clock, CheckCircle2, Eye, XCircle, ChevronRight, FileText, Image as ImageIcon, Trash2, Users, Scissors, Download, MessageCircle, Building2 } from 'lucide-react';
 import { updateBookingStatus, deleteBooking } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
@@ -13,6 +13,9 @@ export default function BookingManager({
   setStatusFilter,
   dateFilter,
   setDateFilter,
+  outletFilter,
+  setOutletFilter,
+  outlets,
   onRefresh,
   onOpenManualModal,
   services
@@ -45,6 +48,7 @@ export default function BookingManager({
 
     const headers = [
       'Kode Booking',
+      'Cabang Outlet',
       'Nama Customer',
       'No. WhatsApp',
       'Email',
@@ -59,6 +63,7 @@ export default function BookingManager({
 
     const rows = bookingsToExport.map(b => [
       b.booking_code,
+      b.outlet_name || 'Semua Outlet',
       b.customer_name,
       b.customer_phone,
       b.customer_email || '-',
@@ -196,6 +201,23 @@ export default function BookingManager({
             </select>
           </div>
 
+          {/* Outlet Filter */}
+          {outlets && outlets.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emeraldsoft" />
+              <select
+                value={outletFilter || ''}
+                onChange={(e) => setOutletFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-grey-border text-xs font-semibold text-slate-dark bg-cream-50 focus:border-emeraldsoft outline-none"
+              >
+                <option value="">{t('all_outlets')}</option>
+                {outlets.map((o) => (
+                  <option key={o.id} value={o.id}>📍 {o.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Service Filter */}
           <div className="flex items-center gap-2">
             <Scissors className="w-4 h-4 text-grey-soft" />
@@ -321,6 +343,11 @@ export default function BookingManager({
                     {/* Customer */}
                     <td className="py-4 px-4 space-y-1">
                       <span className="font-bold text-slate-dark block">{b.customer_name}</span>
+                      {b.outlet_name && (
+                        <span className="text-[11px] font-semibold text-emeraldsoft block">
+                          📍 {b.outlet_name}
+                        </span>
+                      )}
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs text-grey-soft">{b.customer_phone}</span>
                         {b.customer_phone && (

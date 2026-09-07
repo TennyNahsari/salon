@@ -1,0 +1,198 @@
+import React, { useState } from 'react';
+import { MapPin, Phone, CheckCircle, Sparkles, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
+
+export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet, loading }) {
+  const { t } = useLanguage();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 3;
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse bg-white rounded-2xl p-4 border border-grey-border shadow-soft h-28" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!outlets || outlets.length === 0) return null;
+
+  // Pagination Math
+  const totalPages = Math.ceil(outlets.length / itemsPerPage) || 1;
+  const validPage = Math.min(Math.max(currentPage, 1), totalPages);
+  const startIndex = (validPage - 1) * itemsPerPage;
+  const visibleOutlets = outlets.slice(startIndex, startIndex + itemsPerPage);
+
+  const handlePrev = () => {
+    if (validPage > 1) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (validPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 mb-14">
+      
+      {/* Header Banner */}
+      <div className="text-center space-y-2 mb-8">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emeraldsoft/10 text-emeraldsoft text-xs font-bold uppercase tracking-wider border border-emeraldsoft/20 shadow-xs">
+          <Building2 className="w-4 h-4 text-rosegold" />
+          <span>{t('select_outlet_label')}</span>
+        </div>
+        <h3 className="font-serif text-2xl sm:text-4xl font-bold text-slate-dark">
+          Pilih Lokasi Cabang Salon
+        </h3>
+        <p className="text-grey-soft text-xs sm:text-sm max-w-lg mx-auto">
+          Layanan dan terapis profesional akan secara otomatis disesuaikan dengan cabang salon yang Anda pilih.
+        </p>
+      </div>
+
+      {/* Outer Wrapper with Side Arrow Controls */}
+      <div className="relative group">
+
+        {/* Left Arrow Button (Desktop) */}
+        {totalPages > 1 && (
+          <button
+            onClick={handlePrev}
+            disabled={validPage === 1}
+            className="hidden sm:flex absolute -left-5 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white border border-rosegold/40 text-emeraldsoft shadow-luxury items-center justify-center hover:bg-emeraldsoft hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-all duration-300 active:scale-95"
+            title="Cabang Sebelumnya"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+        )}
+
+        {/* Right Arrow Button (Desktop) */}
+        {totalPages > 1 && (
+          <button
+            onClick={handleNext}
+            disabled={validPage === totalPages}
+            className="hidden sm:flex absolute -right-5 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white border border-rosegold/40 text-emeraldsoft shadow-luxury items-center justify-center hover:bg-emeraldsoft hover:text-white disabled:opacity-20 disabled:pointer-events-none transition-all duration-300 active:scale-95"
+            title="Cabang Berikutnya"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        )}
+
+        {/* Outlet Cards Grid / Horizontal Snap Scroll Container */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 transition-all duration-500 ease-in-out">
+          {visibleOutlets.map((outlet) => {
+            const isSelected = selectedOutlet?.id === outlet.id;
+            return (
+              <div
+                key={outlet.id}
+                onClick={() => onSelectOutlet(outlet)}
+                className={`
+                  relative cursor-pointer rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between border-2 min-h-[190px]
+                  ${isSelected 
+                    ? 'bg-gradient-to-br from-emeraldsoft via-[#164e3c] to-emeraldsoft-dark text-white border-rosegold shadow-luxury scale-[1.02] ring-2 ring-rosegold/40' 
+                    : 'bg-white text-slate-dark border-grey-border hover:border-rosegold/60 hover:shadow-luxury hover:-translate-y-1'
+                  }
+                `}
+              >
+                {/* Selected Badge Indicator */}
+                {isSelected && (
+                  <div className="absolute top-4 right-4 bg-rosegold text-slate-dark text-[10px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider animate-in fade-in zoom-in duration-200">
+                    <CheckCircle className="w-3.5 h-3.5 fill-current text-slate-dark" />
+                    <span>Terpilih</span>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-serif font-bold text-xl shrink-0 shadow-sm ${isSelected ? 'bg-white/20 text-rosegold' : 'bg-cream-100 text-emeraldsoft border border-rosegold/30'}`}>
+                      <Building2 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className={`font-serif text-lg sm:text-xl font-bold leading-tight ${isSelected ? 'text-cream' : 'text-slate-dark'}`}>
+                        {outlet.name}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className={`flex items-start gap-2.5 ${isSelected ? 'text-cream-200' : 'text-grey-soft'}`}>
+                      <MapPin className="w-4 h-4 text-rosegold shrink-0 mt-0.5" />
+                      <span className="line-clamp-2 leading-relaxed">{outlet.address}</span>
+                    </div>
+
+                    {outlet.phone && (
+                      <div className={`flex items-center gap-2.5 ${isSelected ? 'text-cream-200' : 'text-grey-soft'}`}>
+                        <Phone className="w-4 h-4 text-rosegold shrink-0" />
+                        <span className="font-mono font-medium">{outlet.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-5 pt-3.5 border-t border-current/15 flex items-center justify-between text-xs font-semibold">
+                  <span className={isSelected ? 'text-rosegold font-bold' : 'text-emeraldsoft font-medium'}>
+                    {isSelected ? '✓ Menampilkan Layanan Outlet Ini' : 'Klik untuk Pilih Outlet'}
+                  </span>
+                  <Sparkles className={`w-4 h-4 ${isSelected ? 'text-rosegold animate-spin-slow' : 'text-grey-soft opacity-60'}`} />
+                </div>
+
+              </div>
+            );
+          })}
+        </div>
+
+      </div>
+
+      {/* Pagination Dot / Number Bar (If more than 3 outlets) */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-8">
+          
+          {/* Mobile Previous Button */}
+          <button
+            onClick={handlePrev}
+            disabled={validPage === 1}
+            className="sm:hidden p-2 rounded-lg bg-white border border-grey-border text-emeraldsoft disabled:opacity-30"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          {/* Dots & Page Indicator */}
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-grey-border shadow-xs">
+            {[...Array(totalPages)].map((_, idx) => {
+              const pageNum = idx + 1;
+              const isActive = pageNum === validPage;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`transition-all duration-300 rounded-full ${
+                    isActive 
+                      ? 'w-8 h-2.5 bg-emeraldsoft rounded-full shadow-sm' 
+                      : 'w-2.5 h-2.5 bg-grey-soft/40 hover:bg-rosegold'
+                  }`}
+                  title={`Halaman Cabang ${pageNum}`}
+                />
+              );
+            })}
+          </div>
+
+          {/* Mobile Next Button */}
+          <button
+            onClick={handleNext}
+            disabled={validPage === totalPages}
+            className="sm:hidden p-2 rounded-lg bg-white border border-grey-border text-emeraldsoft disabled:opacity-30"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+
+        </div>
+      )}
+
+    </div>
+  );
+}

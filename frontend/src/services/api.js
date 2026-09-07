@@ -15,8 +15,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-export const getServices = async () => {
-  const res = await api.get('/services');
+// Outlets API
+export const getOutlets = async (activeOnly = false) => {
+  const res = await api.get('/outlets', { params: { active_only: activeOnly } });
+  return res.data;
+};
+
+export const createOutlet = async (data) => {
+  const res = await api.post('/outlets', data);
+  return res.data;
+};
+
+export const updateOutlet = async (id, data) => {
+  const res = await api.put(`/outlets/${id}`, data);
+  return res.data;
+};
+
+export const deleteOutlet = async (id) => {
+  const res = await api.delete(`/outlets/${id}`);
+  return res.data;
+};
+
+export const getServices = async (outletId = null) => {
+  const res = await api.get('/services', { params: { outlet_id: outletId || undefined } });
   return res.data;
 };
 
@@ -46,19 +67,17 @@ export const checkBookingStatus = async (phone, code) => {
 };
 
 export const uploadPaymentProof = async (formData) => {
-  const res = await api.post('/bookings/upload-proof', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
+  const res = await api.post('/bookings/upload-proof', formData);
   return res.data;
 };
 
-export const getAllBookings = async (status = 'All', date = '') => {
-  const res = await api.get('/bookings', { params: { status, date } });
+export const getAllBookings = async (status = 'All', date = '', outletId = null) => {
+  const res = await api.get('/bookings', { params: { status, date, outlet_id: outletId || undefined } });
   return res.data;
 };
 
-export const refreshBookings = async (status = 'All', date = '') => {
-  const res = await api.post('/bookings/refresh', null, { params: { status, date } });
+export const refreshBookings = async (status = 'All', date = '', outletId = null) => {
+  const res = await api.post('/bookings/refresh', null, { params: { status, date, outlet_id: outletId || undefined } });
   return res.data;
 };
 
@@ -83,9 +102,7 @@ export const getConfigs = async () => {
 };
 
 export const updateConfigs = async (formData) => {
-  const res = await api.put('/configs', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  });
+  const res = await api.put('/configs', formData);
   return res.data;
 };
 
@@ -99,8 +116,8 @@ export const getAdminMe = async () => {
   return res.data;
 };
 
-export const getAllStaff = async () => {
-  const res = await api.get('/staff');
+export const getAllStaff = async (outletId = null) => {
+  const res = await api.get('/staff', { params: { outlet_id: outletId || undefined } });
   return res.data;
 };
 

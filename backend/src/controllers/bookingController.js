@@ -109,6 +109,7 @@ const createBooking = async (req, res) => {
       customer_name, 
       customer_phone, 
       customer_email, 
+      outlet_id,
       service_id, 
       staff_name, 
       booking_datetime, 
@@ -122,6 +123,8 @@ const createBooking = async (req, res) => {
       });
     }
 
+    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
+
     // Check service exists
     const serviceRes = await db.query('SELECT * FROM services WHERE id = $1', [service_id]);
     if (serviceRes.rows.length === 0) {
@@ -129,20 +132,26 @@ const createBooking = async (req, res) => {
     }
     const service = serviceRes.rows[0];
 
-    // 1. Fetch active staff qualified for this service
-    const qualifiedStaffRes = await db.query(
-      `SELECT s.id, s.name 
-       FROM staff s
-       JOIN staff_services ss ON s.id = ss.staff_id
-       WHERE ss.service_id = $1 AND s.is_active = true`,
-      [service_id]
-    );
+    // 1. Fetch active staff qualified for this service & outlet
+    let qualifiedStaffQuery = `
+      SELECT s.id, s.name 
+      FROM staff s
+      JOIN staff_services ss ON s.id = ss.staff_id
+      WHERE ss.service_id = $1 AND s.is_active = true
+    `;
+    const qualifiedParams = [service_id];
+    if (parsedOutletId) {
+      qualifiedStaffQuery += ` AND (s.outlet_id IS NULL OR s.outlet_id = $2)`;
+      qualifiedParams.push(parsedOutletId);
+    }
+
+    const qualifiedStaffRes = await db.query(qualifiedStaffQuery, qualifiedParams);
 
     const qualifiedStaff = qualifiedStaffRes.rows;
     if (qualifiedStaff.length === 0) {
       return res.status(400).json({
         success: false,
-        message: `Mohon maaf, saat ini belum ada staff/terapis aktif yang tersedia untuk layanan ${service.name}.`
+        message: `Mohon maaf, saat ini belum ada staff/terapis aktif yang tersedia untuk layanan ${service.name} di outlet ini.`
       });
     }
 
@@ -221,10 +230,10 @@ const createBooking = async (req, res) => {
       const insertBookingQuery = `
         INSERT INTO bookings (
           booking_code, customer_name, customer_phone, customer_email, 
-          service_id, staff_name, booking_datetime, payment_deadline, 
+          outlet_id, service_id, staff_name, booking_datetime, payment_deadline, 
           status, notes, created_by
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Pending', $9, 'public')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Pending', $10, 'public')
         RETURNING *;
       `;
       const insertBookingValues = [
@@ -232,6 +241,7 @@ const createBooking = async (req, res) => {
         customer_name,
         customer_phone,
         customer_email,
+        parsedOutletId,
         service_id,
         finalStaffName,
         bookingDateStr,
@@ -283,9 +293,12 @@ const checkStatus = async (req, res) => {
     }
 
     let query = `
-      SELECT b.*, s.name as service_name, s.price as service_price, s.duration_minutes as service_duration
+      SELECT b.*, 
+             s.name as service_name, s.price as service_price, s.duration_minutes as service_duration,
+             o.name as outlet_name, o.address as outlet_address, o.phone as outlet_phone
       FROM bookings b
       LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN outlets o ON b.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
@@ -393,11 +406,14 @@ const uploadPaymentProof = async (req, res) => {
 // Get All Bookings (Admin)
 const getAllBookings = async (req, res) => {
   try {
-    const { status, date } = req.query;
+    const { status, date, outlet_id } = req.query;
     let query = `
-      SELECT b.*, s.name as service_name, s.price as service_price, s.duration_minutes as service_duration
+      SELECT b.*, 
+             s.name as service_name, s.price as service_price, s.duration_minutes as service_duration,
+             o.name as outlet_name, o.address as outlet_address
       FROM bookings b
       LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN outlets o ON b.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
@@ -412,13 +428,18 @@ const getAllBookings = async (req, res) => {
       query += ` AND DATE(b.booking_datetime) = $${params.length}`;
     }
 
+    if (outlet_id) {
+      params.push(parseInt(outlet_id));
+      query += ` AND b.outlet_id = $${params.length}`;
+    }
+
     query += ` ORDER BY b.id DESC`;
 
     const result = await db.query(query, params);
     const enrichedBookings = await enrichBookingsWithItems(result.rows);
 
     // Get statistics
-    const statsRes = await db.query(`
+    let statsQuery = `
       SELECT 
         COUNT(*) as total,
         COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending,
@@ -426,8 +447,15 @@ const getAllBookings = async (req, res) => {
         COUNT(CASE WHEN status = 'Processed' THEN 1 END) as processed,
         COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed,
         COUNT(CASE WHEN status = 'Cancelled' THEN 1 END) as cancelled
-      FROM bookings;
-    `);
+      FROM bookings
+    `;
+    let statsParams = [];
+    if (outlet_id) {
+      statsQuery += ` WHERE outlet_id = $1`;
+      statsParams.push(parseInt(outlet_id));
+    }
+
+    const statsRes = await db.query(statsQuery, statsParams);
 
     res.json({
       success: true,
@@ -447,11 +475,14 @@ const refreshBookings = async (req, res) => {
     const cancelled = await autoCancelExpiredBookings();
 
     // 2. Fetch updated bookings
-    const { status, date } = req.query;
+    const { status, date, outlet_id } = req.query;
     let query = `
-      SELECT b.*, s.name as service_name, s.price as service_price, s.duration_minutes as service_duration
+      SELECT b.*, 
+             s.name as service_name, s.price as service_price, s.duration_minutes as service_duration,
+             o.name as outlet_name, o.address as outlet_address
       FROM bookings b
       LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN outlets o ON b.outlet_id = o.id
       WHERE 1=1
     `;
     const params = [];
@@ -466,12 +497,17 @@ const refreshBookings = async (req, res) => {
       query += ` AND DATE(b.booking_datetime) = $${params.length}`;
     }
 
+    if (outlet_id) {
+      params.push(parseInt(outlet_id));
+      query += ` AND b.outlet_id = $${params.length}`;
+    }
+
     query += ` ORDER BY b.id DESC`;
 
     const result = await db.query(query, params);
     const enrichedBookings = await enrichBookingsWithItems(result.rows);
 
-    const statsRes = await db.query(`
+    let statsQuery = `
       SELECT 
         COUNT(*) as total,
         COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending,
@@ -479,8 +515,15 @@ const refreshBookings = async (req, res) => {
         COUNT(CASE WHEN status = 'Processed' THEN 1 END) as processed,
         COUNT(CASE WHEN status = 'Completed' THEN 1 END) as completed,
         COUNT(CASE WHEN status = 'Cancelled' THEN 1 END) as cancelled
-      FROM bookings;
-    `);
+      FROM bookings
+    `;
+    let statsParams = [];
+    if (outlet_id) {
+      statsQuery += ` WHERE outlet_id = $1`;
+      statsParams.push(parseInt(outlet_id));
+    }
+
+    const statsRes = await db.query(statsQuery, statsParams);
 
     res.json({
       success: true,
@@ -540,6 +583,7 @@ const createManualBooking = async (req, res) => {
       customer_name, 
       customer_phone, 
       customer_email, 
+      outlet_id,
       service_id, 
       staff_name, 
       booking_datetime, 
@@ -551,6 +595,7 @@ const createManualBooking = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Nama, No. HP, Layanan, dan Waktu Booking wajib diisi.' });
     }
 
+    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
     const bookingCode = generateBookingCode();
     const bookingDateObj = new Date(booking_datetime);
     // 24 hour default deadline for manual booking
@@ -561,10 +606,10 @@ const createManualBooking = async (req, res) => {
     const query = `
       INSERT INTO bookings (
         booking_code, customer_name, customer_phone, customer_email, 
-        service_id, staff_name, booking_datetime, payment_deadline, 
+        outlet_id, service_id, staff_name, booking_datetime, payment_deadline, 
         status, notes, created_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'admin')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'admin')
       RETURNING *;
     `;
 
@@ -573,6 +618,7 @@ const createManualBooking = async (req, res) => {
       customer_name,
       customer_phone,
       customer_email || 'manual@salon.local',
+      parsedOutletId,
       service_id,
       staff_name || 'Admin / Resepsionis',
       bookingDateObj,

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import AdminSidebar from '../components/Admin/AdminSidebar';
 import DashboardOverview from '../components/Admin/DashboardOverview';
+import OutletManager from '../components/Admin/OutletManager';
 import BookingManager from '../components/Admin/BookingManager';
 import ManualBookingModal from '../components/Admin/ManualBookingModal';
 import ServiceManager from '../components/Admin/ServiceManager';
 import StaffManager from '../components/Admin/StaffManager';
 import PaymentManager from '../components/Admin/PaymentManager';
 import PaymentConfig from '../components/Admin/PaymentConfig';
-import { getAllBookings, refreshBookings, getServices } from '../services/api';
+import { getAllBookings, refreshBookings, getServices, getOutlets } from '../services/api';
 
 export default function AdminDashboardPage({ onGoHome }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -20,6 +21,9 @@ export default function AdminDashboardPage({ onGoHome }) {
   const [services, setServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(true);
 
+  const [outlets, setOutlets] = useState([]);
+  const [outletFilter, setOutletFilter] = useState('');
+
   // Filters
   const [statusFilter, setStatusFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
@@ -30,12 +34,13 @@ export default function AdminDashboardPage({ onGoHome }) {
   useEffect(() => {
     fetchBookingsData();
     fetchServicesData();
-  }, [statusFilter, dateFilter]);
+    fetchOutletsData();
+  }, [statusFilter, dateFilter, outletFilter]);
 
   const fetchBookingsData = async () => {
     try {
       setLoadingBookings(true);
-      const res = await getAllBookings(statusFilter, dateFilter);
+      const res = await getAllBookings(statusFilter, dateFilter, outletFilter);
       if (res.success) {
         setBookings(res.bookings);
         setStats(res.stats);
@@ -61,10 +66,21 @@ export default function AdminDashboardPage({ onGoHome }) {
     }
   };
 
+  const fetchOutletsData = async () => {
+    try {
+      const res = await getOutlets(false);
+      if (res.success) {
+        setOutlets(res.outlets);
+      }
+    } catch (err) {
+      console.error('Error loading outlets:', err);
+    }
+  };
+
   const handleRefresh = async () => {
     try {
       setLoadingBookings(true);
-      const res = await refreshBookings(statusFilter, dateFilter);
+      const res = await refreshBookings(statusFilter, dateFilter, outletFilter);
       if (res.success) {
         setBookings(res.bookings);
         setStats(res.stats);
@@ -95,6 +111,10 @@ export default function AdminDashboardPage({ onGoHome }) {
           />
         )}
 
+        {activeTab === 'outlets' && (
+          <OutletManager />
+        )}
+
         {activeTab === 'bookings' && (
           <BookingManager
             bookings={bookings}
@@ -103,6 +123,9 @@ export default function AdminDashboardPage({ onGoHome }) {
             setStatusFilter={setStatusFilter}
             dateFilter={dateFilter}
             setDateFilter={setDateFilter}
+            outletFilter={outletFilter}
+            setOutletFilter={setOutletFilter}
+            outlets={outlets}
             onRefresh={handleRefresh}
             onOpenManualModal={() => setIsManualModalOpen(true)}
             services={services}
@@ -114,11 +137,12 @@ export default function AdminDashboardPage({ onGoHome }) {
             services={services}
             loading={loadingServices}
             onRefresh={fetchServicesData}
+            outlets={outlets}
           />
         )}
 
         {activeTab === 'staff' && (
-          <StaffManager services={services} />
+          <StaffManager services={services} outlets={outlets} />
         )}
 
         {activeTab === 'payments_module' && (
@@ -139,6 +163,7 @@ export default function AdminDashboardPage({ onGoHome }) {
         isOpen={isManualModalOpen}
         onClose={() => setIsManualModalOpen(false)}
         services={services}
+        outlets={outlets}
         onSaved={fetchBookingsData}
       />
 

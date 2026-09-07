@@ -119,6 +119,11 @@ export default function AfterBookingModal({ isOpen, onClose, booking, configs })
             <p className="text-slate-dark text-sm">
               {t('greeting')} <strong className="text-emeraldsoft">{booking.customer_name}</strong>!
             </p>
+            {booking.outlet_name && (
+              <div className="text-xs font-semibold text-emeraldsoft bg-white/80 px-3 py-1 rounded-full border border-rosegold/30 inline-block my-1">
+                📍 Cabang: {booking.outlet_name}
+              </div>
+            )}
             <div className="inline-flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-lg border border-rosegold/40 shadow-sm mt-1">
               <span className="text-xs text-grey-soft uppercase font-medium">{t('booking_code')}</span>
               <span className="font-mono text-base font-bold text-rosegold-dark">{booking.booking_code}</span>

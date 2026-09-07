@@ -4,15 +4,16 @@ import { getAllStaff, createStaff, updateStaff, deleteStaff } from '../../servic
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
 
-export default function StaffManager({ services }) {
+export default function StaffManager({ services, outlets }) {
   const { t } = useLanguage();
   const [staffList, setStaffList] = useState([]);
 
   const handleExportExcel = () => {
-    const headers = ['ID Staff', 'Nama Staff', 'Peran / Role', 'Status Cuti / Aktif', 'Keahlian Layanan'];
+    const headers = ['ID Staff', 'Nama Staff', 'Cabang Outlet', 'Peran / Role', 'Status Cuti / Aktif', 'Keahlian Layanan'];
     const rows = (staffList || []).map(st => [
       st.id,
       st.name,
+      st.outlet_name || 'Semua Outlet',
       st.role || 'Stylist / Therapist',
       st.is_active ? '🟢 Aktif (Bertugas)' : '🏖️ Cuti / Off',
       st.service_names && st.service_names.length > 0 ? st.service_names.join(', ') : 'Semua Layanan'
@@ -26,6 +27,7 @@ export default function StaffManager({ services }) {
   const [formData, setFormData] = useState({
     name: '',
     role: 'Stylist / Therapist',
+    outlet_id: outlets && outlets.length > 0 ? outlets[0].id : '',
     is_active: true,
     service_ids: []
   });
@@ -56,6 +58,7 @@ export default function StaffManager({ services }) {
     setFormData({
       name: '',
       role: 'Stylist / Therapist',
+      outlet_id: outlets && outlets.length > 0 ? outlets[0].id : '',
       is_active: true,
       service_ids: services ? services.map(s => s.id) : []
     });
@@ -68,6 +71,7 @@ export default function StaffManager({ services }) {
     setFormData({
       name: st.name,
       role: st.role || 'Stylist / Therapist',
+      outlet_id: st.outlet_id || '',
       is_active: st.is_active,
       service_ids: Array.isArray(st.service_ids) ? st.service_ids : []
     });
@@ -194,6 +198,9 @@ export default function StaffManager({ services }) {
                       <div>
                         <h3 className="font-serif font-bold text-slate-dark text-lg leading-snug">{st.name}</h3>
                         <span className="text-xs text-rosegold font-medium block">{st.role || 'Stylist / Therapist'}</span>
+                        <span className="text-[11px] text-emeraldsoft font-bold block mt-0.5">
+                          📍 {st.outlet_name || 'Semua Cabang'}
+                        </span>
                       </div>
                     </div>
 
@@ -290,6 +297,26 @@ export default function StaffManager({ services }) {
                   required
                 />
               </div>
+
+              {outlets && outlets.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">
+                    {t('field_outlet')}
+                  </label>
+                  <select
+                    value={formData.outlet_id}
+                    onChange={(e) => setFormData({ ...formData, outlet_id: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm text-slate-dark bg-cream-50 font-medium"
+                  >
+                    <option value="">-- {t('all_outlets')} --</option>
+                    {outlets.map(o => (
+                      <option key={o.id} value={o.id}>
+                        📍 {o.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark mb-1">

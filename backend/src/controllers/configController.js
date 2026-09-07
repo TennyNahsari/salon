@@ -33,7 +33,7 @@ const updateConfigs = async (req, res) => {
       social_facebook,
       social_linkedin,
       social_threads
-    } = req.body;
+    } = req.body || {};
 
     const updates = [
       { key: 'payment_bank_name', value: payment_bank_name },
@@ -54,7 +54,7 @@ const updateConfigs = async (req, res) => {
     }
 
     for (const item of updates) {
-      if (item.value !== undefined) {
+      if (item.value !== undefined && item.value !== null) {
         await db.query(
           `INSERT INTO configs (key, value) VALUES ($1, $2)
            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
@@ -66,7 +66,7 @@ const updateConfigs = async (req, res) => {
     res.json({ success: true, message: 'Konfigurasi berhasil diperbarui!' });
   } catch (err) {
     console.error('Error updating configs:', err);
-    res.status(500).json({ success: false, message: 'Gagal memperbarui konfigurasi.' });
+    res.status(500).json({ success: false, message: 'Gagal memperbarui konfigurasi: ' + err.message });
   }
 };
 

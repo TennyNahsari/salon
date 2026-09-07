@@ -94,7 +94,7 @@ export default function PaymentConfig() {
         setError(res.message || 'Gagal menyimpan konfigurasi.');
       }
     } catch (err) {
-      setError('Terjadi kesalahan saat memperbarui konfigurasi.');
+      setError(err.response?.data?.message || err.message || 'Terjadi kesalahan saat memperbarui konfigurasi.');
     } finally {
       setSaving(false);
     }

@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { X, Plus, Calendar, User, Phone, Mail, Sparkles } from 'lucide-react';
 import { createManualBooking } from '../../services/api';
 
-export default function ManualBookingModal({ isOpen, onClose, services, onSaved }) {
+export default function ManualBookingModal({ isOpen, onClose, services, outlets, onSaved }) {
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
+    outlet_id: outlets && outlets.length > 0 ? outlets[0].id : '',
     service_id: services && services.length > 0 ? services[0].id : '',
     staff_name: 'Bebas / Any Staff',
     booking_datetime: new Date().toISOString().slice(0, 16),
@@ -32,6 +33,7 @@ export default function ManualBookingModal({ isOpen, onClose, services, onSaved 
       setLoading(true);
       const payload = {
         ...formData,
+        outlet_id: formData.outlet_id ? parseInt(formData.outlet_id) : null,
         service_id: parseInt(formData.service_id)
       };
 
@@ -67,6 +69,25 @@ export default function ManualBookingModal({ isOpen, onClose, services, onSaved 
         {error && <div className="mx-6 mt-4 p-3 rounded-xl bg-status-coral/10 text-status-coral text-xs font-semibold">⚠️ {error}</div>}
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          
+          {outlets && outlets.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-dark mb-1">Cabang Outlet *</label>
+              <select
+                value={formData.outlet_id}
+                onChange={(e) => setFormData({ ...formData, outlet_id: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm bg-cream-50 font-medium"
+                required
+              >
+                {outlets.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    📍 {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-semibold uppercase text-slate-dark mb-1">Nama Customer *</label>
             <input

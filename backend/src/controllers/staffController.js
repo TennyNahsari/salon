@@ -1,21 +1,33 @@
 const db = require('../config/db');
 
-// Get All Staff with mapped service IDs
+// Get All Staff with mapped service IDs and outlet info
 const getAllStaff = async (req, res) => {
   try {
+    const { outlet_id } = req.query;
+    let whereClause = '';
+    let params = [];
+
+    if (outlet_id) {
+      whereClause = 'WHERE s.outlet_id = $1';
+      params = [outlet_id];
+    }
+
     const query = `
       SELECT 
         s.*,
+        o.name as outlet_name,
         COALESCE(
           json_agg(ss.service_id) FILTER (WHERE ss.service_id IS NOT NULL), 
           '[]'
         ) as service_ids
       FROM staff s
+      LEFT JOIN outlets o ON s.outlet_id = o.id
       LEFT JOIN staff_services ss ON s.id = ss.staff_id
-      GROUP BY s.id
+      ${whereClause}
+      GROUP BY s.id, o.name
       ORDER BY s.id ASC;
     `;
-    const result = await db.query(query);
+    const result = await db.query(query, params);
     res.json({
       success: true,
       staff: result.rows
@@ -29,15 +41,17 @@ const getAllStaff = async (req, res) => {
 // Create Staff
 const createStaff = async (req, res) => {
   try {
-    const { name, role, is_active, service_ids } = req.body;
+    const { name, role, outlet_id, is_active, service_ids } = req.body;
     if (!name) {
       return res.status(400).json({ success: false, message: 'Nama staff wajib diisi.' });
     }
 
     const activeState = is_active !== undefined ? is_active : true;
+    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
+
     const staffRes = await db.query(
-      'INSERT INTO staff (name, role, is_active) VALUES ($1, $2, $3) RETURNING *',
-      [name, role || 'Stylist / Therapist', activeState]
+      'INSERT INTO staff (name, role, outlet_id, is_active) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, role || 'Stylist / Therapist', parsedOutletId, activeState]
     );
     const staff = staffRes.rows[0];
 
@@ -69,11 +83,13 @@ const createStaff = async (req, res) => {
 const updateStaff = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, role, is_active, service_ids } = req.body;
+    const { name, role, outlet_id, is_active, service_ids } = req.body;
+
+    const parsedOutletId = outlet_id ? parseInt(outlet_id) : null;
 
     const staffRes = await db.query(
-      'UPDATE staff SET name = $1, role = $2, is_active = $3 WHERE id = $4 RETURNING *',
-      [name, role || 'Stylist / Therapist', is_active, id]
+      'UPDATE staff SET name = $1, role = $2, outlet_id = $3, is_active = $4 WHERE id = $5 RETURNING *',
+      [name, role || 'Stylist / Therapist', parsedOutletId, is_active, id]
     );
 
     if (staffRes.rows.length === 0) {
