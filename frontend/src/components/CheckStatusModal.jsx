@@ -267,11 +267,28 @@ export default function CheckStatusModal({ isOpen, onClose }) {
               {/* Extra Payment Info if Status is Pending */}
               {item.status === 'Pending' && (
                 <div className="p-4 rounded-xl bg-cream-100 border border-cream-200 space-y-3">
-                  <div className="text-xs space-y-1">
-                    <span className="font-bold text-emeraldsoft block">💳 Info Pembayaran Transfer / QRIS</span>
-                    <p className="text-slate-dark">
-                      Bank: <strong>{configs?.payment_bank_name || 'BCA'}</strong> ({configs?.payment_account_number || '8830192847'})
-                    </p>
+                  {/* QRIS Image & Bank Info */}
+                  <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start bg-white p-3 rounded-xl border border-cream-200">
+                    {configs?.payment_qris_image ? (
+                      <div className="shrink-0 text-center">
+                        <img
+                          src={configs.payment_qris_image.startsWith('http') ? configs.payment_qris_image : `http://localhost:5000${configs.payment_qris_image.startsWith('/') ? '' : '/'}${configs.payment_qris_image}`}
+                          alt="QRIS Pembayaran"
+                          className="w-32 h-32 object-contain rounded-lg border border-grey-border p-1 bg-white shadow-xs mx-auto"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        <span className="text-[10px] text-grey-soft font-bold mt-1 block">📱 QRIS All Payment</span>
+                      </div>
+                    ) : null}
+                    <div className="text-xs space-y-1.5 flex-1">
+                      <span className="font-bold text-emeraldsoft block text-sm">💳 Transfer Bank & QRIS</span>
+                      <p className="text-slate-dark">
+                        Bank: <strong>{configs?.payment_bank_name || 'Bank Central Asia (BCA)'}</strong>
+                      </p>
+                      <p className="text-slate-dark">
+                        No. Rekening: <strong className="font-mono text-emeraldsoft text-sm bg-cream-100 px-2 py-0.5 rounded">{configs?.payment_account_number || '8830192847'}</strong>
+                      </p>
+                    </div>
                   </div>
 
                   {/* Upload Form */}
