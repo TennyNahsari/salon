@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Sparkles, Calendar, HeartHandshake, Shield, Star, MessageCircle } from 'lucide-react-native';
+import { Sparkles, Calendar, HeartHandshake, Shield, Star, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import Header from '../components/Header';
 import OutletSelector from '../components/OutletSelector';
 import ServiceCard from '../components/ServiceCard';
@@ -17,6 +17,7 @@ import OrderSuccessModal from '../components/OrderSuccessModal';
 import CheckStatusModal from '../components/CheckStatusModal';
 import { getOutlets, getServices, getConfigs } from '../services/api';
 import { COLORS, SHADOWS } from '../constants/theme';
+import { getPaginationRange } from '../utils/pagination';
 
 export default function HomeScreen({ navigation }) {
   const [outlets, setOutlets] = useState([]);
@@ -25,6 +26,12 @@ export default function HomeScreen({ navigation }) {
 
   const [services, setServices] = useState([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 3;
+
+  const totalPages = Math.ceil(services.length / itemsPerPage) || 1;
+  const validCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+  const currentServices = services.slice((validCurrentPage - 1) * itemsPerPage, validCurrentPage * itemsPerPage);
 
   const [configs, setConfigs] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +50,7 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchServicesData(selectedOutlet?.id || null);
   }, [selectedOutlet]);
 
@@ -160,13 +168,62 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.emptyText}>Belum ada layanan tersedia pada cabang ini.</Text>
             </View>
           ) : (
-            services.map((service) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                onBook={(srv) => handleOpenBooking(srv)}
-              />
-            ))
+            <View>
+              {currentServices.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={service}
+                  onBook={(srv) => handleOpenBooking(srv)}
+                />
+              ))}
+
+              {totalPages > 1 && (
+                <View style={styles.paginationContainer}>
+                  <TouchableOpacity
+                    style={[styles.paginationBtn, validCurrentPage === 1 && styles.paginationBtnDisabled]}
+                    onPress={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={validCurrentPage === 1}
+                  >
+                    <ChevronLeft size={16} color={validCurrentPage === 1 ? COLORS.greyText : COLORS.emerald} />
+                    <Text style={[styles.paginationBtnText, validCurrentPage === 1 && styles.paginationBtnTextDisabled]}>Prev</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.paginationNumbers}>
+                    {getPaginationRange(validCurrentPage, totalPages).map((item, idx) => {
+                      if (item === '...') {
+                        return (
+                          <Text key={`dots-${idx}`} style={styles.dotsText}>
+                            ...
+                          </Text>
+                        );
+                      }
+                      const pageNum = item;
+                      const isActive = pageNum === validCurrentPage;
+                      return (
+                        <TouchableOpacity
+                          key={pageNum}
+                          style={[styles.pageNumBadge, isActive && styles.pageNumBadgeActive]}
+                          onPress={() => setCurrentPage(pageNum)}
+                        >
+                          <Text style={[styles.pageNumBadgeText, isActive && styles.pageNumBadgeTextActive]}>
+                            {pageNum}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.paginationBtn, validCurrentPage === totalPages && styles.paginationBtnDisabled]}
+                    onPress={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={validCurrentPage === totalPages}
+                  >
+                    <Text style={[styles.paginationBtnText, validCurrentPage === totalPages && styles.paginationBtnTextDisabled]}>Next</Text>
+                    <ChevronRight size={16} color={validCurrentPage === totalPages ? COLORS.greyText : COLORS.emerald} />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           )}
         </View>
 
@@ -348,5 +405,71 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: COLORS.greyText,
     lineHeight: 14,
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+    ...SHADOWS.small,
+  },
+  paginationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: COLORS.emerald + '30',
+  },
+  paginationBtnDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  paginationBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.emerald,
+  },
+  paginationBtnTextDisabled: {
+    color: COLORS.greyText,
+  },
+  paginationNumbers: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageNumBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumBadgeActive: {
+    backgroundColor: COLORS.emerald,
+  },
+  pageNumBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.slateDark,
+  },
+  pageNumBadgeTextActive: {
+    color: COLORS.rosegold,
+  },
+  dotsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.greyText,
+    paddingHorizontal: 2,
   },
 });

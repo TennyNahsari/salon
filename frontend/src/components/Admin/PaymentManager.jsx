@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { 
   CreditCard, DollarSign, Calendar, Search, Printer, Trash2, 
   CheckCircle2, Image as ImageIcon, Filter, RefreshCw, FileText, Download, MessageCircle,
-  Building2, MapPin
+  Building2, MapPin, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { deleteBooking } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
+import { getPaginationRange } from '../../utils/pagination';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
 import ThermalReceiptModal from './ThermalReceiptModal';
@@ -91,6 +92,12 @@ export default function PaymentManager({
     const dateSuffix = startDateFilter || endDateFilter ? `_${startDateFilter || 'awal'}_sd_${endDateFilter || 'akhir'}` : '';
     exportToCSV(`Laporan_Pembayaran_LuxeSalon${dateSuffix}`, headers, rows);
   };
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage) || 1;
+  const validCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+  const currentPayments = filteredPayments.slice((validCurrentPage - 1) * itemsPerPage, validCurrentPage * itemsPerPage);
 
   // Calculate statistics
   const totalRevenue = completedBookings.reduce((sum, b) => sum + Number(b.total_price || b.service_price || 0), 0);
@@ -307,7 +314,7 @@ export default function PaymentManager({
                   </td>
                 </tr>
               ) : (
-                filteredPayments.map((b) => (
+                currentPayments.map((b) => (
                   <tr key={b.id} className="hover:bg-cream-50/50 transition-colors">
                     
                     {/* Kode Nota */}
@@ -438,6 +445,62 @@ export default function PaymentManager({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-grey-border bg-cream-50/50">
+            <span className="text-xs text-grey-soft font-medium">
+              Menampilkan {((validCurrentPage - 1) * itemsPerPage) + 1} - {Math.min(validCurrentPage * itemsPerPage, filteredPayments.length)} dari {filteredPayments.length} data
+            </span>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={validCurrentPage === 1}
+                className="px-3 py-1.5 rounded-lg bg-white border border-grey-border text-emeraldsoft hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Prev</span>
+              </button>
+
+              <div className="flex items-center gap-1">
+                {getPaginationRange(validCurrentPage, totalPages).map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span key={`dots-${idx}`} className="px-1.5 py-0.5 text-grey-soft text-xs font-bold select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const pageNum = item;
+                  const isActive = pageNum === validCurrentPage;
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                        isActive
+                          ? 'bg-emeraldsoft text-rosegold shadow-sm scale-105 ring-1 ring-rosegold/50'
+                          : 'bg-white text-slate-dark border border-grey-border hover:border-rosegold hover:text-emeraldsoft'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={validCurrentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg bg-white border border-grey-border text-emeraldsoft hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Modal Cetak Nota EPOS Thermal */}

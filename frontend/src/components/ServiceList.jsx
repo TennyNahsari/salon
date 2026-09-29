@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { getPaginationRange } from '../utils/pagination';
 
 export default function ServiceList({ services, loading, onSelectService }) {
   const { lang, t } = useLanguage();
@@ -133,30 +134,38 @@ export default function ServiceList({ services, loading, onSelectService }) {
 
           {/* Horizontal Pagination Controls */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 pt-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 pt-4">
               
               {/* Previous Page Button */}
               <button
                 onClick={handlePrevPage}
                 disabled={validCurrentPage === 1}
-                className="w-11 h-11 rounded-full border border-emeraldsoft/30 bg-white text-emeraldsoft flex items-center justify-center shadow-sm hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft transition-all"
+                className="px-3 py-2 rounded-xl border border-emeraldsoft/30 bg-white text-emeraldsoft flex items-center gap-1 shadow-sm hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft transition-all text-xs sm:text-sm font-semibold"
                 title="Halaman Sebelumnya"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Prev</span>
               </button>
 
               {/* Page Number Badges */}
-              <div className="flex items-center gap-2">
-                {[...Array(totalPages)].map((_, idx) => {
-                  const pageNum = idx + 1;
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {getPaginationRange(validCurrentPage, totalPages).map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span key={`dots-${idx}`} className="px-2 py-1 text-grey-soft text-xs sm:text-sm font-bold select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const pageNum = item;
                   const isActive = pageNum === validCurrentPage;
                   return (
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-10 h-10 rounded-xl font-bold text-xs transition-all shadow-sm ${
+                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-xs transition-all shadow-sm ${
                         isActive
-                          ? 'bg-emeraldsoft text-rosegold shadow-md scale-105'
+                          ? 'bg-emeraldsoft text-rosegold shadow-md scale-105 ring-2 ring-rosegold/50'
                           : 'bg-white text-slate-dark border border-grey-border hover:border-rosegold hover:text-emeraldsoft'
                       }`}
                     >
@@ -170,10 +179,11 @@ export default function ServiceList({ services, loading, onSelectService }) {
               <button
                 onClick={handleNextPage}
                 disabled={validCurrentPage === totalPages}
-                className="w-11 h-11 rounded-full border border-emeraldsoft/30 bg-white text-emeraldsoft flex items-center justify-center shadow-sm hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft transition-all"
+                className="px-3 py-2 rounded-xl border border-emeraldsoft/30 bg-white text-emeraldsoft flex items-center gap-1 shadow-sm hover:bg-emeraldsoft hover:text-white disabled:opacity-30 disabled:hover:bg-white disabled:hover:text-emeraldsoft transition-all text-xs sm:text-sm font-semibold"
                 title="Halaman Berikutnya"
               >
-                <ChevronRight className="w-5 h-5" />
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
 
             </div>

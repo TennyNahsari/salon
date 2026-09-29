@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { MapPin, Phone, CheckCircle, Sparkles, Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { getPaginationRange } from '../utils/pagination';
 
 export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet, loading }) {
   const { t } = useLanguage();
@@ -180,34 +181,43 @@ export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet
 
       {/* Pagination Dot / Number Bar (If more than 3 outlets) */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between sm:justify-center gap-3 mt-6 sm:mt-8 px-2">
+        <div className="flex items-center justify-between sm:justify-center gap-2 sm:gap-3 mt-6 sm:mt-8 px-2">
           
           {/* Previous Button */}
           <button
             onClick={handlePrev}
             disabled={validPage === 1}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-grey-border text-emeraldsoft disabled:opacity-30 active:scale-95 text-xs font-semibold shadow-xs"
+            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-grey-border text-emeraldsoft hover:bg-emeraldsoft hover:text-white disabled:opacity-30 active:scale-95 text-xs font-semibold shadow-xs transition-all"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span className="sm:hidden">Prev</span>
+            <span>Prev</span>
           </button>
 
           {/* Dots & Page Indicator */}
-          <div className="flex items-center gap-2 bg-white px-3 sm:px-4 py-2 rounded-full border border-grey-border shadow-xs">
-            {[...Array(totalPages)].map((_, idx) => {
-              const pageNum = idx + 1;
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-white px-3 sm:px-4 py-1.5 rounded-2xl border border-grey-border shadow-xs">
+            {getPaginationRange(validPage, totalPages).map((item, idx) => {
+              if (item === '...') {
+                return (
+                  <span key={`dots-${idx}`} className="px-1.5 py-0.5 text-grey-soft text-xs font-bold select-none">
+                    ...
+                  </span>
+                );
+              }
+              const pageNum = item;
               const isActive = pageNum === validPage;
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`transition-all duration-300 rounded-full ${
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg font-bold text-xs transition-all ${
                     isActive 
-                      ? 'w-6 sm:w-8 h-2 sm:h-2.5 bg-emeraldsoft rounded-full shadow-sm' 
-                      : 'w-2 sm:w-2.5 h-2 sm:h-2.5 bg-grey-soft/40 hover:bg-rosegold'
+                      ? 'bg-emeraldsoft text-rosegold shadow-sm scale-105 ring-1 ring-rosegold/50' 
+                      : 'bg-cream-100 text-slate-dark border border-grey-border hover:border-rosegold hover:text-emeraldsoft'
                   }`}
                   title={`Halaman Cabang ${pageNum}`}
-                />
+                >
+                  {pageNum}
+                </button>
               );
             })}
           </div>
@@ -216,9 +226,9 @@ export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet
           <button
             onClick={handleNext}
             disabled={validPage === totalPages}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-grey-border text-emeraldsoft disabled:opacity-30 active:scale-95 text-xs font-semibold shadow-xs"
+            className="flex items-center gap-1 px-3 py-2 rounded-xl bg-white border border-grey-border text-emeraldsoft hover:bg-emeraldsoft hover:text-white disabled:opacity-30 active:scale-95 text-xs font-semibold shadow-xs transition-all"
           >
-            <span className="sm:hidden">Next</span>
+            <span>Next</span>
             <ChevronRight className="w-4 h-4" />
           </button>
 

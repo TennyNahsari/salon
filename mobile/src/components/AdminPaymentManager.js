@@ -27,10 +27,13 @@ import {
   X,
   TrendingUp,
   Printer,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react-native';
 import { COLORS, SHADOWS } from '../constants/theme';
 import { getAllBookings, deleteBooking, getConfigs, API_BASE_URL } from '../services/api';
 import ThermalReceiptModal from './ThermalReceiptModal';
+import { getPaginationRange } from '../utils/pagination';
 
 const SERVER_ROOT = API_BASE_URL.replace(/\/api\/?$/, '');
 
@@ -139,6 +142,12 @@ export default function AdminPaymentManager() {
     );
   });
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage) || 1;
+  const validCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+  const currentPayments = filteredPayments.slice((validCurrentPage - 1) * itemsPerPage, validCurrentPage * itemsPerPage);
+
   return (
     <View style={styles.container}>
       {/* Top Header */}
@@ -194,7 +203,7 @@ export default function AdminPaymentManager() {
           <Text style={styles.emptyText}>Belum ada riwayat transaksi lunas.</Text>
         </View>
       ) : (
-        filteredPayments.map((item) => {
+        currentPayments.map((item) => {
           let proofs = [];
           if (Array.isArray(item.proofs) && item.proofs.length > 0) {
             proofs = item.proofs;
@@ -296,6 +305,52 @@ export default function AdminPaymentManager() {
             </View>
           );
         })
+      )}
+
+      {/* Pagination Bar */}
+      {totalPages > 1 && (
+        <View style={styles.paginationBar}>
+          <TouchableOpacity
+            style={[styles.pageBtn, validCurrentPage === 1 && styles.pageBtnDisabled]}
+            onPress={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            disabled={validCurrentPage === 1}
+          >
+            <ChevronLeft size={16} color={validCurrentPage === 1 ? COLORS.greyText : COLORS.emerald} />
+            <Text style={[styles.pageBtnText, validCurrentPage === 1 && styles.pageBtnTextDisabled]}>Prev</Text>
+          </TouchableOpacity>
+
+          <View style={styles.pageNumbersRow}>
+            {getPaginationRange(validCurrentPage, totalPages).map((item, idx) => {
+              if (item === '...') {
+                return (
+                  <Text key={`dots-${idx}`} style={styles.dotsText}>
+                    ...
+                  </Text>
+                );
+              }
+              const pageNum = item;
+              const isActive = pageNum === validCurrentPage;
+              return (
+                <TouchableOpacity
+                  key={pageNum}
+                  style={[styles.pageNumBtn, isActive && styles.pageNumBtnActive]}
+                  onPress={() => setCurrentPage(pageNum)}
+                >
+                  <Text style={[styles.pageNumText, isActive && styles.pageNumTextActive]}>{pageNum}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.pageBtn, validCurrentPage === totalPages && styles.pageBtnDisabled]}
+            onPress={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            disabled={validCurrentPage === totalPages}
+          >
+            <Text style={[styles.pageBtnText, validCurrentPage === totalPages && styles.pageBtnTextDisabled]}>Next</Text>
+            <ChevronRight size={16} color={validCurrentPage === totalPages ? COLORS.greyText : COLORS.emerald} />
+          </TouchableOpacity>
+        </View>
       )}
 
       {/* Thermal Receipt Print Modal */}
@@ -636,5 +691,72 @@ const styles = StyleSheet.create({
     height: 220,
     borderRadius: 12,
     backgroundColor: '#F1F5F9',
+  },
+  paginationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: COLORS.emerald + '30',
+  },
+  pageBtnDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  pageBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.emerald,
+  },
+  pageBtnTextDisabled: {
+    color: COLORS.greyText,
+  },
+  pageNumbersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageNumBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageNumBtnActive: {
+    backgroundColor: COLORS.emerald,
+  },
+  pageNumText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.slateDark,
+  },
+  pageNumTextActive: {
+    color: COLORS.rosegold,
+  },
+  dotsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.greyText,
+    paddingHorizontal: 2,
   },
 });
