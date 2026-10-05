@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Sparkles, UserCheck, ShieldCheck, Globe, Menu, X } from 'lucide-react';
+import { Search, Sparkles, ShieldCheck, Globe, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -65,19 +65,17 @@ export default function Navbar({ onOpenCheckStatus, onSelectServiceClick, onAdmi
             <span>{t('nav_check_status')}</span>
           </button>
 
-          {/* Admin Dashboard / Login Button */}
-          <button
-            onClick={onAdminClick}
-            className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
-              admin 
-                ? 'bg-emeraldsoft text-rosegold hover:bg-emeraldsoft-dark shadow-sm' 
-                : 'text-grey-soft hover:text-emeraldsoft hover:bg-cream-200'
-            }`}
-            title={admin ? t('nav_admin_dashboard') : 'Login Admin / Staff'}
-          >
-            {admin ? <ShieldCheck className="w-4 h-4 text-rosegold" /> : <UserCheck className="w-4 h-4" />}
-            <span>{admin ? `💻 ${t('nav_admin_dashboard')}` : 'Admin'}</span>
-          </button>
+          {/* Admin Dashboard Button (Only if logged in) */}
+          {admin && (
+            <button
+              onClick={onAdminClick}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all bg-emeraldsoft text-rosegold hover:bg-emeraldsoft-dark shadow-sm"
+              title={t('nav_admin_dashboard')}
+            >
+              <ShieldCheck className="w-4 h-4 text-rosegold" />
+              <span>{`💻 ${t('nav_admin_dashboard')}`}</span>
+            </button>
+          )}
 
           {/* Mobile Hamburger Button */}
           <button
@@ -119,15 +117,17 @@ export default function Navbar({ onOpenCheckStatus, onSelectServiceClick, onAdmi
             </a>
           </nav>
 
-          <div className="pt-2 flex items-center justify-between gap-3">
-            <button
-              onClick={() => { setMobileMenuOpen(false); onAdminClick(); }}
-              className="w-full py-2.5 rounded-xl bg-emeraldsoft text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
-            >
-              {admin ? <ShieldCheck className="w-4 h-4 text-rosegold" /> : <UserCheck className="w-4 h-4" />}
-              <span>{admin ? t('nav_admin_dashboard') : 'Login Admin / Staff'}</span>
-            </button>
-          </div>
+          {admin && (
+            <div className="pt-2 flex items-center justify-between gap-3">
+              <button
+                onClick={() => { setMobileMenuOpen(false); onAdminClick(); }}
+                className="w-full py-2.5 rounded-xl bg-emeraldsoft text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4 text-rosegold" />
+                <span>{t('nav_admin_dashboard')}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
