@@ -1,4 +1,21 @@
 const db = require('../config/db');
+const fs = require('fs');
+const path = require('path');
+
+// Helper to remove physical file from disk if stored in uploads/services
+const removePhysicalFile = (imageUrl) => {
+  if (imageUrl && imageUrl.startsWith('/uploads/services/')) {
+    const filename = path.basename(imageUrl);
+    const filePath = path.join(__dirname, '../../uploads/services', filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error('Error removing old service photo file:', filePath, err);
+      }
+    }
+  }
+};
 
 const getAllServices = async (req, res) => {
   try {
@@ -61,13 +78,24 @@ const getServiceById = async (req, res) => {
 
 const createService = async (req, res) => {
   try {
-    const { name, duration_minutes, price, description, image_url, outlet_ids } = req.body;
+    let { name, duration_minutes, price, description, image_url, outlet_ids } = req.body;
     if (!name || !duration_minutes || !price) {
       return res.status(400).json({ success: false, message: 'Nama, durasi, dan harga wajib diisi.' });
     }
 
     const isSuperAdmin = req.admin?.role === 'admin';
     const userOutletId = req.admin?.outlet_id;
+
+    let parsedOutletIds = [];
+    if (typeof outlet_ids === 'string') {
+      try {
+        parsedOutletIds = JSON.parse(outlet_ids);
+      } catch (e) {
+        parsedOutletIds = outlet_ids.split(',').map(id => id.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(outlet_ids)) {
+      parsedOutletIds = outlet_ids;
+    }
 
     let finalOutletIds = [];
     let createdByOutletId = null;
@@ -79,14 +107,18 @@ const createService = async (req, res) => {
       createdByOutletId = userOutletId;
       finalOutletIds = [userOutletId];
     } else {
-      finalOutletIds = Array.isArray(outlet_ids) ? outlet_ids : [];
+      finalOutletIds = parsedOutletIds;
     }
 
-    const defaultImg = image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
+    let finalImageUrl = image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
+    if (req.file) {
+      finalImageUrl = `/uploads/services/${req.file.filename}`;
+    }
+
     const result = await db.query(
       `INSERT INTO services (name, duration_minutes, price, description, image_url, created_by_outlet_id)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, parseInt(duration_minutes), parseFloat(price), description || '', defaultImg, createdByOutletId]
+      [name, parseInt(duration_minutes), parseFloat(price), description || '', finalImageUrl, createdByOutletId]
     );
 
     const service = result.rows[0];
@@ -118,7 +150,7 @@ const createService = async (req, res) => {
 const updateService = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, duration_minutes, price, description, image_url, outlet_ids } = req.body;
+    let { name, duration_minutes, price, description, image_url, outlet_ids, remove_photo } = req.body;
 
     const isSuperAdmin = req.admin?.role === 'admin';
     const userOutletId = req.admin?.outlet_id;
@@ -149,17 +181,41 @@ const updateService = async (req, res) => {
       }
     }
 
+    let finalImageUrl = image_url;
+    if (req.file) {
+      finalImageUrl = `/uploads/services/${req.file.filename}`;
+      if (currentService.image_url && currentService.image_url !== finalImageUrl) {
+        removePhysicalFile(currentService.image_url);
+      }
+    } else if (remove_photo === 'true' || remove_photo === true) {
+      finalImageUrl = '';
+      if (currentService.image_url) {
+        removePhysicalFile(currentService.image_url);
+      }
+    } else if (image_url === '' && currentService.image_url) {
+      removePhysicalFile(currentService.image_url);
+    }
+
+    let parsedOutletIds = outlet_ids;
+    if (typeof outlet_ids === 'string') {
+      try {
+        parsedOutletIds = JSON.parse(outlet_ids);
+      } catch (e) {
+        parsedOutletIds = outlet_ids.split(',').map(sId => sId.trim()).filter(Boolean);
+      }
+    }
+
     const result = await db.query(
       `UPDATE services 
        SET name = $1, duration_minutes = $2, price = $3, description = $4, image_url = $5
        WHERE id = $6 RETURNING *`,
-      [name, parseInt(duration_minutes), parseFloat(price), description, image_url, id]
+      [name, parseInt(duration_minutes), parseFloat(price), description, finalImageUrl, id]
     );
 
     // Update outlet mappings
     let finalOutletIds = [];
     if (isSuperAdmin) {
-      finalOutletIds = Array.isArray(outlet_ids) ? outlet_ids : [];
+      finalOutletIds = Array.isArray(parsedOutletIds) ? parsedOutletIds : [];
       await db.query('DELETE FROM outlet_services WHERE service_id = $1', [id]);
       for (const outletId of finalOutletIds) {
         await db.query(
@@ -213,6 +269,10 @@ const deleteService = async (req, res) => {
     }
 
     const result = await db.query('DELETE FROM services WHERE id = $1 RETURNING *', [id]);
+    if (currentService.image_url) {
+      removePhysicalFile(currentService.image_url);
+    }
+
     res.json({ success: true, message: 'Layanan berhasil dihapus.' });
   } catch (err) {
     console.error('Error deleting service:', err);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Scissors, Clock, Tag, X, Image as ImageIcon, Download, Building2, Lock } from 'lucide-react';
+import { Plus, Edit2, Trash2, Scissors, Clock, Tag, X, Image as ImageIcon, Download, Building2, Lock, Upload, Link as LinkIcon } from 'lucide-react';
 import { createService, updateService, deleteService } from '../../services/api';
 import { exportToCSV } from '../../utils/exportExcel';
 import { useLanguage } from '../../context/LanguageContext';
@@ -37,35 +37,79 @@ export default function ServiceManager({ services, loading, onRefresh, outlets, 
     image_url: '',
     outlet_ids: []
   });
+
+  // Photo state (File vs URL & Remove Flag)
+  const [photoMode, setPhotoMode] = useState('file'); // 'file' | 'url'
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [removePhotoFlag, setRemovePhotoFlag] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const defaultServiceFallbackImg = 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
+
   const handleOpenAdd = () => {
     setEditingService(null);
+    const defaultUrl = defaultServiceFallbackImg;
     setFormData({
       name: '',
       duration_minutes: 60,
       price: 150000,
       description: '',
-      image_url: 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80',
+      image_url: defaultUrl,
       outlet_ids: isBranchAdmin ? [Number(userOutletId)] : (outlets ? outlets.map(o => o.id) : [])
     });
+    setPhotoMode('file');
+    setImageFile(null);
+    setImagePreview(defaultUrl);
+    setRemovePhotoFlag(false);
     setError('');
     setModalOpen(true);
   };
 
   const handleOpenEdit = (service) => {
     setEditingService(service);
+    const currentImg = service.image_url || '';
     setFormData({
       name: service.name,
       duration_minutes: service.duration_minutes,
       price: service.price,
       description: service.description || '',
-      image_url: service.image_url || '',
+      image_url: currentImg,
       outlet_ids: isBranchAdmin ? [Number(userOutletId)] : (Array.isArray(service.outlet_ids) ? service.outlet_ids : [])
     });
+
+    const isUploadedFile = currentImg.startsWith('/uploads');
+    setPhotoMode(isUploadedFile ? 'file' : 'url');
+    setImageFile(null);
+    setImagePreview(currentImg);
+    setRemovePhotoFlag(false);
     setError('');
     setModalOpen(true);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+      setRemovePhotoFlag(false);
+    }
+  };
+
+  const handleUrlChange = (e) => {
+    const url = e.target.value;
+    setFormData(prev => ({ ...prev, image_url: url }));
+    setImagePreview(url);
+    setRemovePhotoFlag(false);
+  };
+
+  const handleRemovePhoto = () => {
+    setImageFile(null);
+    setImagePreview('');
+    setFormData(prev => ({ ...prev, image_url: '' }));
+    setRemovePhotoFlag(true);
   };
 
   const handleToggleOutlet = (outletId) => {
@@ -100,15 +144,25 @@ export default function ServiceManager({ services, loading, onRefresh, outlets, 
 
     try {
       setSubmitting(true);
-      const payload = {
-        ...formData,
-        outlet_ids: isBranchAdmin ? [Number(userOutletId)] : formData.outlet_ids
-      };
+
+      const submitData = new FormData();
+      submitData.append('name', formData.name);
+      submitData.append('duration_minutes', formData.duration_minutes);
+      submitData.append('price', formData.price);
+      submitData.append('description', formData.description || '');
+      submitData.append('outlet_ids', JSON.stringify(isBranchAdmin ? [Number(userOutletId)] : formData.outlet_ids));
+      submitData.append('remove_photo', removePhotoFlag ? 'true' : 'false');
+
+      if (photoMode === 'file' && imageFile) {
+        submitData.append('service_image', imageFile);
+      } else {
+        submitData.append('image_url', removePhotoFlag ? '' : (formData.image_url || ''));
+      }
 
       if (editingService) {
-        await updateService(editingService.id, payload);
+        await updateService(editingService.id, submitData);
       } else {
-        await createService(payload);
+        await createService(submitData);
       }
       setModalOpen(false);
       onRefresh();
@@ -182,9 +236,12 @@ export default function ServiceManager({ services, loading, onRefresh, outlets, 
                     <tr key={s.id} className="hover:bg-cream-50/60 transition-colors">
                       <td className="py-3 px-4">
                         <img
-                          src={s.image_url || 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80'}
+                          src={s.image_url || defaultServiceFallbackImg}
                           alt={s.name}
                           className="w-12 h-12 object-cover rounded-xl border border-grey-border"
+                          onError={(e) => {
+                            e.target.src = defaultServiceFallbackImg;
+                          }}
                         />
                       </td>
                       <td className="py-3 px-4 font-bold text-emeraldsoft">
@@ -357,15 +414,103 @@ export default function ServiceManager({ services, loading, onRefresh, outlets, 
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-dark mb-1">{t('field_service_image')}</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={formData.image_url}
-                  onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                  className="w-full px-4 py-2 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-sm"
-                />
+              {/* Photo Field (Upload File OR URL Toggle) */}
+              <div className="bg-cream-50 p-4 rounded-xl border border-grey-border space-y-3">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-dark flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-emeraldsoft" />
+                  <span>{t('field_service_photo')}</span>
+                </label>
+
+                {/* Mode Selector Buttons */}
+                <div className="grid grid-cols-2 gap-2 bg-white p-1 rounded-xl border border-grey-border">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoMode('file')}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      photoMode === 'file'
+                        ? 'bg-emeraldsoft text-white shadow-xs'
+                        : 'text-grey-soft hover:text-slate-dark'
+                    }`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{t('option_upload_file')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPhotoMode('url')}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      photoMode === 'url'
+                        ? 'bg-emeraldsoft text-white shadow-xs'
+                        : 'text-grey-soft hover:text-slate-dark'
+                    }`}
+                  >
+                    <LinkIcon className="w-3.5 h-3.5" />
+                    <span>{t('option_photo_url')}</span>
+                  </button>
+                </div>
+
+                {/* Inputs based on Mode */}
+                {photoMode === 'file' ? (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="block w-full text-xs text-slate-dark file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emeraldsoft file:text-white hover:file:bg-emeraldsoft-dark cursor-pointer"
+                    />
+                    {imageFile && (
+                      <p className="text-[11px] text-emeraldsoft font-semibold mt-1">
+                        ✓ File terpilih: {imageFile.name}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="url"
+                      placeholder="https://images.unsplash.com/..."
+                      value={formData.image_url}
+                      onChange={handleUrlChange}
+                      className="w-full px-4 py-2 rounded-xl border border-grey-border focus:border-emeraldsoft outline-none text-xs text-slate-dark bg-white"
+                    />
+                  </div>
+                )}
+
+                {/* Live Image Preview Box with Remove Photo Button */}
+                {imagePreview ? (
+                  <div className="pt-2 border-t border-cream-200">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] text-grey-soft font-semibold">
+                        Preview Foto Layanan:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleRemovePhoto}
+                        className="px-2.5 py-1 rounded-lg bg-status-coral/10 hover:bg-status-coral text-status-coral hover:text-white border border-status-coral/30 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                        title="Hapus foto dari layanan ini"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>{t('btn_remove_service_photo')}</span>
+                      </button>
+                    </div>
+
+                    <div className="relative h-36 w-full rounded-xl overflow-hidden border border-grey-border bg-white shadow-xs">
+                      <img
+                        src={imagePreview}
+                        alt="Preview Layanan"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = defaultServiceFallbackImg;
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-cream-200 text-center py-3 bg-white/60 rounded-xl border border-dashed border-grey-border">
+                    <p className="text-xs text-grey-soft italic">Belum ada foto layanan terpasang.</p>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -397,4 +542,3 @@ export default function ServiceManager({ services, loading, onRefresh, outlets, 
     </div>
   );
 }
-

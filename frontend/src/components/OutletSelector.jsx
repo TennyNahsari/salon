@@ -115,42 +115,58 @@ export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet
         )}
 
         {/* Outlet Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-6 transition-all duration-500 ease-in-out">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 transition-all duration-500 ease-in-out">
           {visibleOutlets.map((outlet) => {
             const isSelected = selectedOutlet?.id === outlet.id;
+            const defaultImg = 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
+
             return (
               <div
                 key={outlet.id}
                 onClick={() => onSelectOutlet(outlet)}
                 className={`
-                  relative cursor-pointer rounded-2xl p-4 sm:p-6 transition-all duration-300 flex flex-col justify-between border-2 min-h-[160px] sm:min-h-[190px] active:scale-[0.98] select-none
+                  relative cursor-pointer rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between border-2 active:scale-[0.98] select-none group
                   ${isSelected 
                     ? 'bg-gradient-to-br from-emeraldsoft via-[#164e3c] to-emeraldsoft-dark text-white border-rosegold shadow-luxury ring-2 ring-rosegold/40' 
                     : 'bg-white text-slate-dark border-grey-border hover:border-rosegold/60 hover:shadow-luxury hover:-translate-y-0.5'
                   }
                 `}
               >
-                {/* Selected Badge Indicator */}
-                {isSelected && (
-                  <div className="absolute top-3.5 right-3.5 sm:top-4 sm:right-4 bg-rosegold text-slate-dark text-[9px] sm:text-[10px] font-extrabold px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider animate-in fade-in zoom-in duration-200">
-                    <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current text-slate-dark" />
-                    <span>{t('outlet_selected')}</span>
-                  </div>
-                )}
+                {/* Outlet Thumbnail Cover Image */}
+                <div className="relative h-40 sm:h-44 w-full bg-cream-100 overflow-hidden">
+                  <img
+                    src={outlet.image_url || defaultImg}
+                    alt={outlet.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={(e) => {
+                      e.target.src = defaultImg;
+                    }}
+                  />
+                  <div className={`absolute inset-0 ${isSelected ? 'bg-gradient-to-t from-emeraldsoft-dark/90 via-emeraldsoft-dark/30 to-transparent' : 'bg-gradient-to-t from-slate-dark/60 via-transparent to-transparent'}`} />
 
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center font-serif font-bold text-lg sm:text-xl shrink-0 shadow-sm ${isSelected ? 'bg-white/20 text-rosegold' : 'bg-cream-100 text-emeraldsoft border border-rosegold/30'}`}>
-                      <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                  {/* Selected Badge Indicator */}
+                  {isSelected ? (
+                    <div className="absolute top-3 right-3 bg-rosegold text-slate-dark text-[9px] sm:text-[10px] font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-md uppercase tracking-wider animate-in fade-in zoom-in duration-200 backdrop-blur-md">
+                      <CheckCircle className="w-3.5 h-3.5 fill-current text-slate-dark" />
+                      <span>{t('outlet_selected')}</span>
                     </div>
-                    <div className="pr-16 sm:pr-0">
-                      <h4 className={`font-serif text-base sm:text-lg font-bold leading-tight ${isSelected ? 'text-cream' : 'text-slate-dark'}`}>
-                        {outlet.name}
-                      </h4>
+                  ) : (
+                    <div className="absolute top-3 right-3 bg-slate-dark/50 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-white/20">
+                      📍 Salon Branch
                     </div>
-                  </div>
+                  )}
 
-                  <div className="space-y-1.5 sm:space-y-2 text-xs">
+                  {/* Outlet Name Overlay on Photo */}
+                  <div className="absolute bottom-3 left-3 right-3">
+                    <h4 className="font-serif text-base sm:text-lg font-bold text-cream drop-shadow-md leading-tight">
+                      {outlet.name}
+                    </h4>
+                  </div>
+                </div>
+
+                {/* Card Body Info */}
+                <div className="p-4 sm:p-5 flex-grow flex flex-col justify-between space-y-3">
+                  <div className="space-y-2 text-xs">
                     <div className={`flex items-start gap-2 ${isSelected ? 'text-cream-200' : 'text-grey-soft'}`}>
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rosegold shrink-0 mt-0.5" />
                       <span className="line-clamp-2 leading-relaxed text-[11px] sm:text-xs">{outlet.address}</span>
@@ -163,13 +179,13 @@ export default function OutletSelector({ outlets, selectedOutlet, onSelectOutlet
                       </div>
                     )}
                   </div>
-                </div>
 
-                <div className="mt-3.5 sm:mt-5 pt-2.5 sm:pt-3.5 border-t border-current/15 flex items-center justify-between text-[11px] sm:text-xs font-semibold">
-                  <span className={isSelected ? 'text-rosegold font-bold' : 'text-emeraldsoft font-medium'}>
-                    {isSelected ? t('outlet_showing_services') : t('outlet_click_to_select')}
-                  </span>
-                  <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isSelected ? 'text-rosegold animate-spin-slow' : 'text-grey-soft opacity-60'}`} />
+                  <div className="pt-2.5 sm:pt-3 border-t border-current/15 flex items-center justify-between text-[11px] sm:text-xs font-semibold">
+                    <span className={isSelected ? 'text-rosegold font-bold' : 'text-emeraldsoft font-medium'}>
+                      {isSelected ? t('outlet_showing_services') : t('outlet_click_to_select')}
+                    </span>
+                    <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isSelected ? 'text-rosegold animate-spin-slow' : 'text-grey-soft opacity-60'}`} />
+                  </div>
                 </div>
 
               </div>

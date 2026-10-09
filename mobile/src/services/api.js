@@ -7,6 +7,16 @@ const DEFAULT_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'ht
 
 export const API_BASE_URL = DEFAULT_URL;
 
+export const getFullImageUrl = (imageUrl, defaultFallback = '') => {
+  if (!imageUrl) return defaultFallback;
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('file://') || imageUrl.startsWith('data:')) {
+    return imageUrl;
+  }
+  const host = API_BASE_URL.replace(/\/api\/?$/, '');
+  const cleanPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+  return `${host}${cleanPath}`;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
@@ -32,12 +42,14 @@ export const getOutlets = async (activeOnly = false) => {
 };
 
 export const createOutlet = async (data) => {
-  const res = await api.post('/outlets', data);
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const res = await api.post('/outlets', data, isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {});
   return res.data;
 };
 
 export const updateOutlet = async (id, data) => {
-  const res = await api.put(`/outlets/${id}`, data);
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const res = await api.put(`/outlets/${id}`, data, isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {});
   return res.data;
 };
 
@@ -53,12 +65,14 @@ export const getServices = async (outletId = null) => {
 };
 
 export const createService = async (data) => {
-  const res = await api.post('/services', data);
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const res = await api.post('/services', data, isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {});
   return res.data;
 };
 
 export const updateService = async (id, data) => {
-  const res = await api.put(`/services/${id}`, data);
+  const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+  const res = await api.put(`/services/${id}`, data, isFormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : {});
   return res.data;
 };
 

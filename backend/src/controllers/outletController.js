@@ -1,4 +1,21 @@
 const db = require('../config/db');
+const fs = require('fs');
+const path = require('path');
+
+// Helper to remove physical file from disk if it was stored in uploads/outlets
+const removePhysicalFile = (imageUrl) => {
+  if (imageUrl && imageUrl.startsWith('/uploads/outlets/')) {
+    const filename = path.basename(imageUrl);
+    const filePath = path.join(__dirname, '../../uploads/outlets', filename);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.error('Error removing old outlet photo file:', filePath, err);
+      }
+    }
+  }
+};
 
 // Get All Outlets (with mapped service_ids)
 const getAllOutlets = async (req, res) => {
@@ -64,23 +81,38 @@ const getOutletById = async (req, res) => {
 // Create Outlet
 const createOutlet = async (req, res) => {
   try {
-    const { name, address, phone, image_url, is_active, service_ids } = req.body;
+    let { name, address, phone, image_url, is_active, service_ids } = req.body;
     if (!name || !address) {
       return res.status(400).json({ success: false, message: 'Nama outlet dan alamat wajib diisi.' });
     }
 
-    const activeState = is_active !== undefined ? is_active : true;
-    const defaultImg = image_url || 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
+    const activeState = is_active !== undefined ? (is_active === true || is_active === 'true') : true;
+    
+    let finalImageUrl = image_url || 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
+    if (req.file) {
+      finalImageUrl = `/uploads/outlets/${req.file.filename}`;
+    }
+
+    let parsedServiceIds = [];
+    if (typeof service_ids === 'string') {
+      try {
+        parsedServiceIds = JSON.parse(service_ids);
+      } catch (e) {
+        parsedServiceIds = service_ids.split(',').map(id => id.trim()).filter(Boolean);
+      }
+    } else if (Array.isArray(service_ids)) {
+      parsedServiceIds = service_ids;
+    }
 
     const outletRes = await db.query(
       'INSERT INTO outlets (name, address, phone, image_url, is_active) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [name, address, phone || '', defaultImg, activeState]
+      [name, address, phone || '', finalImageUrl, activeState]
     );
     const outlet = outletRes.rows[0];
 
     // Insert service mappings for outlet
-    if (Array.isArray(service_ids) && service_ids.length > 0) {
-      for (const serviceId of service_ids) {
+    if (Array.isArray(parsedServiceIds) && parsedServiceIds.length > 0) {
+      for (const serviceId of parsedServiceIds) {
         await db.query(
           'INSERT INTO outlet_services (outlet_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [outlet.id, parseInt(serviceId)]
@@ -93,7 +125,7 @@ const createOutlet = async (req, res) => {
       message: 'Outlet cabang baru berhasil ditambahkan!',
       outlet: {
         ...outlet,
-        service_ids: service_ids || []
+        service_ids: parsedServiceIds
       }
     });
   } catch (err) {
@@ -106,21 +138,51 @@ const createOutlet = async (req, res) => {
 const updateOutlet = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, address, phone, image_url, is_active, service_ids } = req.body;
+    let { name, address, phone, image_url, is_active, service_ids, remove_photo } = req.body;
+
+    const activeState = is_active !== undefined ? (is_active === true || is_active === 'true') : true;
+
+    // Fetch existing outlet record to compare image_url
+    const currentRes = await db.query('SELECT * FROM outlets WHERE id = $1', [id]);
+    if (currentRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Outlet tidak ditemukan.' });
+    }
+    const currentOutlet = currentRes.rows[0];
+
+    let finalImageUrl = image_url;
+    if (req.file) {
+      finalImageUrl = `/uploads/outlets/${req.file.filename}`;
+      // Clean up previous uploaded file if replacing
+      if (currentOutlet.image_url && currentOutlet.image_url !== finalImageUrl) {
+        removePhysicalFile(currentOutlet.image_url);
+      }
+    } else if (remove_photo === 'true' || remove_photo === true) {
+      finalImageUrl = '';
+      if (currentOutlet.image_url) {
+        removePhysicalFile(currentOutlet.image_url);
+      }
+    } else if (image_url === '' && currentOutlet.image_url) {
+      removePhysicalFile(currentOutlet.image_url);
+    }
+
+    let parsedServiceIds = service_ids;
+    if (typeof service_ids === 'string') {
+      try {
+        parsedServiceIds = JSON.parse(service_ids);
+      } catch (e) {
+        parsedServiceIds = service_ids.split(',').map(sId => sId.trim()).filter(Boolean);
+      }
+    }
 
     const outletRes = await db.query(
       'UPDATE outlets SET name = $1, address = $2, phone = $3, image_url = $4, is_active = $5 WHERE id = $6 RETURNING *',
-      [name, address, phone || '', image_url, is_active, id]
+      [name, address, phone || '', finalImageUrl, activeState, id]
     );
 
-    if (outletRes.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Outlet tidak ditemukan.' });
-    }
-
     // Update service mappings
-    if (Array.isArray(service_ids)) {
+    if (Array.isArray(parsedServiceIds)) {
       await db.query('DELETE FROM outlet_services WHERE outlet_id = $1', [id]);
-      for (const serviceId of service_ids) {
+      for (const serviceId of parsedServiceIds) {
         await db.query(
           'INSERT INTO outlet_services (outlet_id, service_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
           [id, parseInt(serviceId)]
@@ -133,7 +195,7 @@ const updateOutlet = async (req, res) => {
       message: 'Data outlet berhasil diperbarui!',
       outlet: {
         ...outletRes.rows[0],
-        service_ids: service_ids || []
+        service_ids: Array.isArray(parsedServiceIds) ? parsedServiceIds : []
       }
     });
   } catch (err) {
@@ -149,6 +211,11 @@ const deleteOutlet = async (req, res) => {
     const result = await db.query('DELETE FROM outlets WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'Outlet tidak ditemukan.' });
+    }
+
+    // Clean up physical photo file if it was uploaded
+    if (result.rows[0].image_url) {
+      removePhysicalFile(result.rows[0].image_url);
     }
 
     res.json({

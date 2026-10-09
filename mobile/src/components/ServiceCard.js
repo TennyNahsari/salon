@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Clock, Tag, CalendarCheck } from 'lucide-react-native';
 import { COLORS, SHADOWS } from '../constants/theme';
+import { getFullImageUrl } from '../services/api';
+
+const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
 
 export default function ServiceCard({ service, onBook }) {
   const formatPrice = (price) => {
@@ -12,22 +15,31 @@ export default function ServiceCard({ service, onBook }) {
     }).format(price || 0);
   };
 
+  const imgUri = getFullImageUrl(service.image_url, DEFAULT_IMAGE);
+
   return (
     <View style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={styles.categoryBadge}>
-          <Tag size={12} color={COLORS.rosegold} />
-          <Text style={styles.categoryText}>{service.category || 'General'}</Text>
-        </View>
-        {service.duration_minutes ? (
-          <View style={styles.durationRow}>
-            <Clock size={12} color={COLORS.greyText} />
-            <Text style={styles.durationText}>{service.duration_minutes} Menit</Text>
+      <View style={styles.headerRow}>
+        <Image source={{ uri: imgUri }} style={styles.serviceImg} />
+        
+        <View style={styles.headerInfo}>
+          <View style={styles.topRow}>
+            <View style={styles.categoryBadge}>
+              <Tag size={10} color={COLORS.rosegold} />
+              <Text style={styles.categoryText}>{service.category || 'Treatment'}</Text>
+            </View>
+            {service.duration_minutes ? (
+              <View style={styles.durationRow}>
+                <Clock size={12} color={COLORS.greyText} />
+                <Text style={styles.durationText}>{service.duration_minutes} Menit</Text>
+              </View>
+            ) : null}
           </View>
-        ) : null}
+
+          <Text style={styles.serviceName}>{service.name}</Text>
+        </View>
       </View>
 
-      <Text style={styles.serviceName}>{service.name}</Text>
       {service.description ? (
         <Text style={styles.serviceDesc} numberOfLines={2}>
           {service.description}
@@ -54,17 +66,32 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 18,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.greyBorder,
     ...SHADOWS.small,
   },
+  headerRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  serviceImg: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: COLORS.creamDark,
+  },
+  headerInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   categoryBadge: {
     flexDirection: 'row',
@@ -72,11 +99,11 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: COLORS.creamDark,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   categoryText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: COLORS.emerald,
     textTransform: 'uppercase',
@@ -87,31 +114,30 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   durationText: {
-    fontSize: 11,
+    fontSize: 10,
     color: COLORS.greyText,
   },
   serviceName: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: COLORS.slateDark,
-    marginBottom: 4,
   },
   serviceDesc: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.greyText,
-    lineHeight: 16,
-    marginBottom: 12,
+    lineHeight: 15,
+    marginBottom: 10,
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: COLORS.greyBorder,
   },
   price: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.emerald,
   },

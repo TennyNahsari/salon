@@ -12,9 +12,10 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { Scissors, Plus, Edit2, Trash2, Clock, Tag, X, MapPin } from 'lucide-react-native';
+import { Scissors, Plus, Edit2, Trash2, Clock, Tag, X, MapPin, Image as ImageIcon, Upload, Link as LinkIcon } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SHADOWS } from '../constants/theme';
-import { getServices, createService, updateService, deleteService, getOutlets } from '../services/api';
+import { getServices, createService, updateService, deleteService, getOutlets, getFullImageUrl } from '../services/api';
 
 const DEFAULT_IMAGE = 'https://images.unsplash.com/photo-1560750588-73207b1ef5b8?auto=format&fit=crop&w=600&q=80';
 
@@ -30,8 +31,15 @@ export default function AdminServiceManager() {
   const [duration, setDuration] = useState('60');
   const [price, setPrice] = useState('150000');
   const [description, setDescription] = useState('');
-  const [imageUrl, setImageUrl] = useState(DEFAULT_IMAGE);
   const [selectedOutletIds, setSelectedOutletIds] = useState([]);
+
+  // Photo state (File vs URL & Remove Flag)
+  const [photoMode, setPhotoMode] = useState('file'); // 'file' | 'url'
+  const [imageAsset, setImageAsset] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [removePhotoFlag, setRemovePhotoFlag] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -62,8 +70,14 @@ export default function AdminServiceManager() {
     setDuration('60');
     setPrice('150000');
     setDescription('');
-    setImageUrl(DEFAULT_IMAGE);
     setSelectedOutletIds(outlets.map((o) => o.id));
+
+    setPhotoMode('file');
+    setImageAsset(null);
+    setImageUrl(DEFAULT_IMAGE);
+    setImagePreview(DEFAULT_IMAGE);
+    setRemovePhotoFlag(false);
+
     setError('');
     setIsModalOpen(true);
   };
@@ -74,10 +88,50 @@ export default function AdminServiceManager() {
     setDuration(String(service.duration_minutes || 60));
     setPrice(String(service.price || 0));
     setDescription(service.description || '');
-    setImageUrl(service.image_url || DEFAULT_IMAGE);
     setSelectedOutletIds(Array.isArray(service.outlet_ids) ? service.outlet_ids : []);
+
+    const rawImg = service.image_url || '';
+    const isUploaded = rawImg.startsWith('/uploads');
+    setPhotoMode(isUploaded ? 'file' : 'url');
+    setImageAsset(null);
+    setImageUrl(rawImg);
+    setImagePreview(getFullImageUrl(rawImg, DEFAULT_IMAGE));
+    setRemovePhotoFlag(false);
+
     setError('');
     setIsModalOpen(true);
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Izin Ditolak', 'Izin akses galeri dibutuhkan untuk mengunggah foto.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImageAsset(asset);
+        setImagePreview(asset.uri);
+        setRemovePhotoFlag(false);
+      }
+    } catch (err) {
+      console.error('Error picking service image:', err);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setImageAsset(null);
+    setImageUrl('');
+    setImagePreview('');
+    setRemovePhotoFlag(true);
   };
 
   const toggleOutlet = (outletId) => {
@@ -98,20 +152,34 @@ export default function AdminServiceManager() {
     setSaving(true);
 
     try {
-      const payload = {
-        name,
-        duration_minutes: Number(duration),
-        price: Number(price),
-        description,
-        image_url: imageUrl,
-        outlet_ids: selectedOutletIds,
-      };
+      const submitData = new FormData();
+      submitData.append('name', name);
+      submitData.append('duration_minutes', String(Number(duration)));
+      submitData.append('price', String(Number(price)));
+      submitData.append('description', description || '');
+      submitData.append('outlet_ids', JSON.stringify(selectedOutletIds));
+      submitData.append('remove_photo', removePhotoFlag ? 'true' : 'false');
+
+      if (photoMode === 'file' && imageAsset) {
+        const uri = imageAsset.uri;
+        const filename = uri.split('/').pop() || `service-${Date.now()}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+        submitData.append('service_image', {
+          uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+          name: filename,
+          type: type,
+        });
+      } else {
+        submitData.append('image_url', removePhotoFlag ? '' : (imageUrl || ''));
+      }
 
       let res;
       if (editingService) {
-        res = await updateService(editingService.id, payload);
+        res = await updateService(editingService.id, submitData);
       } else {
-        res = await createService(payload);
+        res = await createService(submitData);
       }
 
       if (res.success) {
@@ -165,7 +233,7 @@ export default function AdminServiceManager() {
       <View style={styles.topHeader}>
         <View>
           <Text style={styles.topTitle}>KELOLA LAYANAN SALON (SERVICES)</Text>
-          <Text style={styles.topSub}>Atur katalog treatment, harga, durasi, dan cabang outlet</Text>
+          <Text style={styles.topSub}>Atur katalog treatment, harga, durasi, foto, dan cabang outlet</Text>
         </View>
 
         <TouchableOpacity style={styles.addBtn} onPress={handleOpenAddModal} activeOpacity={0.8}>
@@ -187,10 +255,12 @@ export default function AdminServiceManager() {
       ) : (
         services.map((item) => {
           const mappedOutlets = outlets.filter((o) => (item.outlet_ids || []).includes(o.id));
+          const imgUri = getFullImageUrl(item.image_url, DEFAULT_IMAGE);
+
           return (
             <View key={item.id} style={styles.card}>
               <View style={styles.cardMain}>
-                <Image source={{ uri: item.image_url || DEFAULT_IMAGE }} style={styles.serviceImg} />
+                <Image source={{ uri: imgUri }} style={styles.serviceImg} />
                 
                 <View style={styles.cardBody}>
                   <Text style={styles.serviceName}>{item.name}</Text>
@@ -311,14 +381,71 @@ export default function AdminServiceManager() {
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>URL FOTO LAYANAN</Text>
-              <View style={styles.inputBox}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="https://images.unsplash.com/..."
-                  value={imageUrl}
-                  onChangeText={setImageUrl}
-                />
+              {/* Photo Input (File Upload OR URL) */}
+              <View style={styles.photoContainer}>
+                <Text style={styles.inputLabel}>FOTO / GAMBAR LAYANAN</Text>
+
+                <View style={styles.modeTabs}>
+                  <TouchableOpacity
+                    style={[styles.modeTab, photoMode === 'file' && styles.modeTabActive]}
+                    onPress={() => setPhotoMode('file')}
+                  >
+                    <Upload size={14} color={photoMode === 'file' ? COLORS.white : COLORS.greyText} />
+                    <Text style={[styles.modeTabText, photoMode === 'file' && styles.modeTabTextActive]}>
+                      📁 Unggah File Foto
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modeTab, photoMode === 'url' && styles.modeTabActive]}
+                    onPress={() => setPhotoMode('url')}
+                  >
+                    <LinkIcon size={14} color={photoMode === 'url' ? COLORS.white : COLORS.greyText} />
+                    <Text style={[styles.modeTabText, photoMode === 'url' && styles.modeTabTextActive]}>
+                      🔗 Input URL Foto
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {photoMode === 'file' ? (
+                  <TouchableOpacity style={styles.pickImageBtn} onPress={handlePickImage} activeOpacity={0.8}>
+                    <Upload size={16} color={COLORS.emerald} />
+                    <Text style={styles.pickImageBtnText}>
+                      {imageAsset ? `File: ${imageAsset.fileName || 'Gambar Terpilih'}` : 'Pilih Foto dari Galeri'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="https://images.unsplash.com/..."
+                      value={imageUrl}
+                      onChangeText={(val) => {
+                        setImageUrl(val);
+                        setImagePreview(val);
+                        setRemovePhotoFlag(false);
+                      }}
+                    />
+                  </View>
+                )}
+
+                {/* Preview & Remove Photo */}
+                {imagePreview ? (
+                  <View style={styles.previewBox}>
+                    <View style={styles.previewHeader}>
+                      <Text style={styles.previewTitle}>Preview Foto Layanan:</Text>
+                      <TouchableOpacity style={styles.removePhotoBtn} onPress={handleRemovePhoto}>
+                        <Trash2 size={12} color="#B91C1C" />
+                        <Text style={styles.removePhotoText}>Hapus Foto</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Image source={{ uri: imagePreview }} style={styles.previewImage} />
+                  </View>
+                ) : (
+                  <View style={styles.emptyPreviewBox}>
+                    <Text style={styles.emptyPreviewText}>Belum ada foto layanan terpasang.</Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.inputLabel}>DESKRIPSI LAYANAN</Text>
@@ -628,6 +755,110 @@ const styles = StyleSheet.create({
   rowGrid: {
     flexDirection: 'row',
     gap: 10,
+  },
+  photoContainer: {
+    backgroundColor: COLORS.white,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+    marginTop: 10,
+  },
+  modeTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.creamDark,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+  },
+  modeTabActive: {
+    backgroundColor: COLORS.emerald,
+    borderColor: COLORS.emerald,
+  },
+  modeTabText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.greyText,
+  },
+  modeTabTextActive: {
+    color: COLORS.white,
+  },
+  pickImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.emeraldLight,
+    borderWidth: 1,
+    borderColor: COLORS.emerald,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  pickImageBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.emerald,
+  },
+  previewBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.greyBorder,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  previewTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.greyText,
+  },
+  removePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  removePhotoText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  previewImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    resizeMode: 'cover',
+  },
+  emptyPreviewBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.creamDark,
+    alignItems: 'center',
+  },
+  emptyPreviewText: {
+    fontSize: 11,
+    color: COLORS.greyText,
+    fontStyle: 'italic',
   },
   outletChecklist: {
     gap: 6,

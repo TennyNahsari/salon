@@ -6,8 +6,10 @@ const fs = require('fs');
 const uploadDir = path.join(__dirname, '../../uploads');
 const paymentProofDir = path.join(uploadDir, 'payment_proofs');
 const qrisDir = path.join(uploadDir, 'qris');
+const outletDir = path.join(uploadDir, 'outlets');
+const servicesDir = path.join(uploadDir, 'services');
 
-[uploadDir, paymentProofDir, qrisDir].forEach(dir => {
+[uploadDir, paymentProofDir, qrisDir, outletDir, servicesDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -17,6 +19,10 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'qris_image') {
       cb(null, qrisDir);
+    } else if (file.fieldname === 'outlet_image') {
+      cb(null, outletDir);
+    } else if (file.fieldname === 'service_image' || file.fieldname === 'image') {
+      cb(null, servicesDir);
     } else {
       cb(null, paymentProofDir);
     }

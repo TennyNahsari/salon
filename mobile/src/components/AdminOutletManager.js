@@ -11,10 +11,14 @@ import {
   Alert,
   Platform,
   Switch,
+  Image,
 } from 'react-native';
-import { Building2, Plus, Edit2, Trash2, MapPin, Phone, X, Check, Sparkles } from 'lucide-react-native';
+import { Building2, Plus, Edit2, Trash2, MapPin, Phone, X, Check, Sparkles, Image as ImageIcon, Upload, Link as LinkIcon } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SHADOWS } from '../constants/theme';
-import { getOutlets, createOutlet, updateOutlet, deleteOutlet, getServices } from '../services/api';
+import { getOutlets, createOutlet, updateOutlet, deleteOutlet, getServices, getFullImageUrl } from '../services/api';
+
+const DEFAULT_OUTLET_IMAGE = 'https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=600&q=80';
 
 export default function AdminOutletManager() {
   const [outlets, setOutlets] = useState([]);
@@ -29,6 +33,14 @@ export default function AdminOutletManager() {
   const [phone, setPhone] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [selectedServiceIds, setSelectedServiceIds] = useState([]);
+
+  // Photo state (File vs URL & Remove Flag)
+  const [photoMode, setPhotoMode] = useState('file'); // 'file' | 'url'
+  const [imageAsset, setImageAsset] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [removePhotoFlag, setRemovePhotoFlag] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,6 +72,13 @@ export default function AdminOutletManager() {
     setPhone('');
     setIsActive(true);
     setSelectedServiceIds(services.map((s) => s.id));
+
+    setPhotoMode('file');
+    setImageAsset(null);
+    setImageUrl('');
+    setImagePreview('');
+    setRemovePhotoFlag(false);
+
     setError('');
     setIsModalOpen(true);
   };
@@ -71,8 +90,49 @@ export default function AdminOutletManager() {
     setPhone(outlet.phone || '');
     setIsActive(outlet.is_active ?? true);
     setSelectedServiceIds(outlet.service_ids || []);
+
+    const rawImg = outlet.image_url || '';
+    const isUploaded = rawImg.startsWith('/uploads');
+    setPhotoMode(isUploaded ? 'file' : 'url');
+    setImageAsset(null);
+    setImageUrl(rawImg);
+    setImagePreview(getFullImageUrl(rawImg, DEFAULT_OUTLET_IMAGE));
+    setRemovePhotoFlag(false);
+
     setError('');
     setIsModalOpen(true);
+  };
+
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Izin Ditolak', 'Izin akses galeri dibutuhkan untuk mengunggah foto.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImageAsset(asset);
+        setImagePreview(asset.uri);
+        setRemovePhotoFlag(false);
+      }
+    } catch (err) {
+      console.error('Error picking image:', err);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setImageAsset(null);
+    setImageUrl('');
+    setImagePreview('');
+    setRemovePhotoFlag(true);
   };
 
   const toggleService = (serviceId) => {
@@ -93,19 +153,34 @@ export default function AdminOutletManager() {
     setSaving(true);
 
     try {
-      const payload = {
-        name,
-        address,
-        phone,
-        is_active: isActive,
-        service_ids: selectedServiceIds,
-      };
+      const submitData = new FormData();
+      submitData.append('name', name);
+      submitData.append('address', address);
+      submitData.append('phone', phone);
+      submitData.append('is_active', isActive ? 'true' : 'false');
+      submitData.append('service_ids', JSON.stringify(selectedServiceIds));
+      submitData.append('remove_photo', removePhotoFlag ? 'true' : 'false');
+
+      if (photoMode === 'file' && imageAsset) {
+        const uri = imageAsset.uri;
+        const filename = uri.split('/').pop() || `outlet-${Date.now()}.jpg`;
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+        submitData.append('outlet_image', {
+          uri: Platform.OS === 'android' ? uri : uri.replace('file://', ''),
+          name: filename,
+          type: type,
+        });
+      } else {
+        submitData.append('image_url', removePhotoFlag ? '' : (imageUrl || ''));
+      }
 
       let res;
       if (editingOutlet) {
-        res = await updateOutlet(editingOutlet.id, payload);
+        res = await updateOutlet(editingOutlet.id, submitData);
       } else {
-        res = await createOutlet(payload);
+        res = await createOutlet(submitData);
       }
 
       if (res.success) {
@@ -151,7 +226,7 @@ export default function AdminOutletManager() {
       <View style={styles.headerBar}>
         <View>
           <Text style={styles.headerTitle}>KELOLA CABANG OUTLET</Text>
-          <Text style={styles.headerSub}>Tambah, ubah data, dan atur pemetaan layanan per outlet</Text>
+          <Text style={styles.headerSub}>Tambah, ubah data, unggah foto, & atur layanan outlet</Text>
         </View>
 
         <TouchableOpacity style={styles.addBtn} onPress={handleOpenAddModal} activeOpacity={0.8}>
@@ -170,74 +245,85 @@ export default function AdminOutletManager() {
           <Text style={styles.emptyText}>Belum ada outlet cabang terdaftar.</Text>
         </View>
       ) : (
-        outlets.map((item) => (
-          <View key={item.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.badge, item.is_active ? styles.badgeActive : styles.badgeInactive]}>
-                <Text style={[styles.badgeText, item.is_active ? styles.badgeTextActive : styles.badgeTextInactive]}>
-                  {item.is_active ? 'AKTIF' : 'NONAKTIF'}
-                </Text>
+        outlets.map((item) => {
+          const imgUri = getFullImageUrl(item.image_url, DEFAULT_OUTLET_IMAGE);
+          return (
+            <View key={item.id} style={styles.card}>
+              {/* Cover Photo */}
+              <View style={styles.cardCoverBox}>
+                <Image source={{ uri: imgUri }} style={styles.cardCoverImg} />
+                <View style={styles.cardCoverOverlay} />
+                
+                <View style={styles.cardBadgeRow}>
+                  <View style={[styles.badge, item.is_active ? styles.badgeActive : styles.badgeInactive]}>
+                    <Text style={[styles.badgeText, item.is_active ? styles.badgeTextActive : styles.badgeTextInactive]}>
+                      {item.is_active ? 'AKTIF' : 'NONAKTIF'}
+                    </Text>
+                  </View>
+                  <Text style={styles.idBadge}>ID: #{item.id}</Text>
+                </View>
+
+                <Text style={styles.outletNameOverlay}>{item.name}</Text>
               </View>
-              <Text style={styles.idText}>ID: #{item.id}</Text>
-            </View>
 
-            <Text style={styles.outletName}>{item.name}</Text>
+              <View style={styles.cardContent}>
+                <View style={styles.infoRow}>
+                  <MapPin size={14} color={COLORS.rosegold} />
+                  <Text style={styles.infoText}>{item.address}</Text>
+                </View>
 
-            <View style={styles.infoRow}>
-              <MapPin size={14} color={COLORS.rosegold} />
-              <Text style={styles.infoText}>{item.address}</Text>
-            </View>
-
-            {item.phone ? (
-              <View style={styles.infoRow}>
-                <Phone size={14} color={COLORS.emerald} />
-                <Text style={styles.infoText}>{item.phone}</Text>
-              </View>
-            ) : null}
-
-            <View style={styles.servicesBox}>
-              <Text style={styles.servicesTitle}>
-                📋 Layanan Terhubung: ({item.service_ids?.length || 0} / {services.length})
-              </Text>
-              <View style={styles.servicesChips}>
-                {services
-                  .filter((s) => item.service_ids?.includes(s.id))
-                  .slice(0, 3)
-                  .map((s) => (
-                    <View key={s.id} style={styles.chip}>
-                      <Text style={styles.chipText}>{s.name}</Text>
-                    </View>
-                  ))}
-                {(item.service_ids?.length || 0) > 3 ? (
-                  <View style={styles.chipMore}>
-                    <Text style={styles.chipMoreText}>+{(item.service_ids?.length || 0) - 3} lainnya</Text>
+                {item.phone ? (
+                  <View style={styles.infoRow}>
+                    <Phone size={14} color={COLORS.emerald} />
+                    <Text style={styles.infoText}>{item.phone}</Text>
                   </View>
                 ) : null}
+
+                <View style={styles.servicesBox}>
+                  <Text style={styles.servicesTitle}>
+                    📋 Layanan Terhubung: ({item.service_ids?.length || 0} / {services.length})
+                  </Text>
+                  <View style={styles.servicesChips}>
+                    {services
+                      .filter((s) => item.service_ids?.includes(s.id))
+                      .slice(0, 3)
+                      .map((s) => (
+                        <View key={s.id} style={styles.chip}>
+                          <Text style={styles.chipText}>{s.name}</Text>
+                        </View>
+                      ))}
+                    {(item.service_ids?.length || 0) > 3 ? (
+                      <View style={styles.chipMore}>
+                        <Text style={styles.chipMoreText}>+{(item.service_ids?.length || 0) - 3} lainnya</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+
+                {/* Action buttons */}
+                <View style={styles.cardFooter}>
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={() => handleOpenEditModal(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Edit2 size={14} color={COLORS.slateDark} />
+                    <Text style={styles.editBtnText}>Edit</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => handleDelete(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Trash2 size={14} color="#B91C1C" />
+                    <Text style={styles.deleteBtnText}>Hapus</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-
-            {/* Action buttons */}
-            <View style={styles.cardFooter}>
-              <TouchableOpacity
-                style={styles.editBtn}
-                onPress={() => handleOpenEditModal(item)}
-                activeOpacity={0.7}
-              >
-                <Edit2 size={14} color={COLORS.slateDark} />
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.deleteBtn}
-                onPress={() => handleDelete(item)}
-                activeOpacity={0.7}
-              >
-                <Trash2 size={14} color="#B91C1C" />
-                <Text style={styles.deleteBtnText}>Hapus</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
+          );
+        })
       )}
 
       {/* Add / Edit Modal */}
@@ -271,6 +357,73 @@ export default function AdminOutletManager() {
                   value={name}
                   onChangeText={setName}
                 />
+              </View>
+
+              {/* Photo Input (File Upload OR URL) */}
+              <View style={styles.photoContainer}>
+                <Text style={styles.inputLabel}>FOTO THUMBNAIL OUTLET</Text>
+
+                <View style={styles.modeTabs}>
+                  <TouchableOpacity
+                    style={[styles.modeTab, photoMode === 'file' && styles.modeTabActive]}
+                    onPress={() => setPhotoMode('file')}
+                  >
+                    <Upload size={14} color={photoMode === 'file' ? COLORS.white : COLORS.greyText} />
+                    <Text style={[styles.modeTabText, photoMode === 'file' && styles.modeTabTextActive]}>
+                      📁 Unggah File Foto
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modeTab, photoMode === 'url' && styles.modeTabActive]}
+                    onPress={() => setPhotoMode('url')}
+                  >
+                    <LinkIcon size={14} color={photoMode === 'url' ? COLORS.white : COLORS.greyText} />
+                    <Text style={[styles.modeTabText, photoMode === 'url' && styles.modeTabTextActive]}>
+                      🔗 Input URL Foto
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {photoMode === 'file' ? (
+                  <TouchableOpacity style={styles.pickImageBtn} onPress={handlePickImage} activeOpacity={0.8}>
+                    <Upload size={16} color={COLORS.emerald} />
+                    <Text style={styles.pickImageBtnText}>
+                      {imageAsset ? `File: ${imageAsset.fileName || 'Gambar Terpilih'}` : 'Pilih Foto dari Galeri'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.inputBox}>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="https://images.unsplash.com/..."
+                      value={imageUrl}
+                      onChangeText={(val) => {
+                        setImageUrl(val);
+                        setImagePreview(val);
+                        setRemovePhotoFlag(false);
+                      }}
+                    />
+                  </View>
+                )}
+
+                {/* Preview & Remove Photo */}
+                {imagePreview ? (
+                  <View style={styles.previewBox}>
+                    <View style={styles.previewHeader}>
+                      <Text style={styles.previewTitle}>Preview Foto Outlet:</Text>
+                      <TouchableOpacity style={styles.removePhotoBtn} onPress={handleRemovePhoto}>
+                        <Trash2 size={12} color="#B91C1C" />
+                        <Text style={styles.removePhotoText}>Hapus Foto</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Image source={{ uri: imagePreview }} style={styles.previewImage} />
+                  </View>
+                ) : (
+                  <View style={styles.emptyPreviewBox}>
+                    <Text style={styles.emptyPreviewText}>Belum ada foto outlet terpasang.</Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.inputLabel}>ALAMAT OUTLET</Text>
@@ -418,17 +571,35 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.greyBorder,
+    overflow: 'hidden',
     ...SHADOWS.small,
   },
-  cardHeader: {
+  cardCoverBox: {
+    height: 120,
+    width: '100%',
+    position: 'relative',
+    backgroundColor: COLORS.creamDark,
+  },
+  cardCoverImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  cardCoverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  cardBadgeRow: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   badge: {
     paddingHorizontal: 8,
@@ -436,31 +607,36 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   badgeActive: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(4, 120, 87, 0.85)',
   },
   badgeInactive: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'rgba(185, 28, 28, 0.85)',
   },
   badgeText: {
     fontSize: 9,
     fontWeight: '800',
+    color: COLORS.white,
   },
-  badgeTextActive: {
-    color: '#047857',
-  },
-  badgeTextInactive: {
-    color: '#B91C1C',
-  },
-  idText: {
+  idBadge: {
     fontSize: 10,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    color: COLORS.greyText,
+    color: COLORS.white,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  outletName: {
+  outletNameOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    left: 12,
+    right: 12,
     fontSize: 16,
     fontWeight: '800',
-    color: COLORS.slateDark,
-    marginBottom: 6,
+    color: COLORS.white,
+  },
+  cardContent: {
+    padding: 14,
   },
   infoRow: {
     flexDirection: 'row',
@@ -617,6 +793,110 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.slateDark,
     paddingVertical: 6,
+  },
+  photoContainer: {
+    backgroundColor: COLORS.white,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+    marginTop: 10,
+  },
+  modeTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.creamDark,
+    borderWidth: 1,
+    borderColor: COLORS.greyBorder,
+  },
+  modeTabActive: {
+    backgroundColor: COLORS.emerald,
+    borderColor: COLORS.emerald,
+  },
+  modeTabText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.greyText,
+  },
+  modeTabTextActive: {
+    color: COLORS.white,
+  },
+  pickImageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.emeraldLight,
+    borderWidth: 1,
+    borderColor: COLORS.emerald,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  pickImageBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.emerald,
+  },
+  previewBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.greyBorder,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  previewTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.greyText,
+  },
+  removePhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  removePhotoText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B91C1C',
+  },
+  previewImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 12,
+    resizeMode: 'cover',
+  },
+  emptyPreviewBox: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.creamDark,
+    alignItems: 'center',
+  },
+  emptyPreviewText: {
+    fontSize: 11,
+    color: COLORS.greyText,
+    fontStyle: 'italic',
   },
   switchRow: {
     flexDirection: 'row',
